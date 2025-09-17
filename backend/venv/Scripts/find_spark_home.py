@@ -1,4 +1,4 @@
-#!C:\Users\kerel\IST 495 News Sentiment Project\venv\Scripts\python.exe
+#!C:\Users\kerel\IST 495 News Sentiment Project\backend\venv\Scripts\python.exe
 
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
