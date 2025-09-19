@@ -1,0 +1,22 @@
+# Core scraping
+requests
+beautifulsoup4
+lxml
+
+# Data handling
+pandas
+numpy
+pyspark
+
+# Database access
+psycopg2-binary
+sqlalchemy
+
+# Backend API
+fastapi
+uvicorn
+
+# Optional: add testing & formatting tools if you need them later
+# pytest
+# black
+# isort
