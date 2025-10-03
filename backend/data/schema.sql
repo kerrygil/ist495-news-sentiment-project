@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS sentiments CASCADE;
 DROP TABLE IF EXISTS articles CASCADE;
 DROP TABLE IF EXISTS tickers CASCADE;
+DROP TABLE IF EXISTS historical_prices CASCADE;
 
 -- ================================
 -- Table: tickers
@@ -21,9 +22,12 @@ CREATE TABLE articles (
     id SERIAL PRIMARY KEY,
     ticker_id INT NOT NULL REFERENCES tickers(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
-    url TEXT,
+    url TEXT NOT NULL UNIQUE,
     published_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE INDEX idx_articles_ticker_id ON articles(ticker_id);
+CREATE INDEX idx_articles_published_at ON articles(published_at);
 
 -- ================================
 -- Table: sentiments
@@ -31,32 +35,30 @@ CREATE TABLE articles (
 CREATE TABLE sentiments (
     id SERIAL PRIMARY KEY,
     article_id INT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-    sentiment_score NUMERIC(5,2),  -- example: -1.00 to +1.00
-    sentiment_label VARCHAR(20),   -- e.g., 'positive', 'neutral', 'negative'
-    model_version TEXT,            -- which ML model generated it
+    sentiment_score NUMERIC(5,2),  -- -1.00 to +1.00
+    sentiment_label VARCHAR(20),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_sentiments_article_id ON sentiments(article_id);
+
 -- ================================
--- Table: historical prices
+-- Table: historical_prices
 -- ================================
-CREATE TABLE public.historical_prices (
-    id serial,
-    ticker_id integer NOT NULL,
-    article_id integer NOT NULL,
-    "interval" character varying(10)[] NOT NULL,
-    price numeric NOT NULL,
-    pct_change numeric,
-    created_at timestamp with time zone DEFAULT now(),
-    PRIMARY KEY (id),
-    CONSTRAINT article_id FOREIGN KEY (article_id)
-        REFERENCES public.articles (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE
-        NOT VALID,
-    CONSTRAINT ticker_id FOREIGN KEY (ticker_id)
-        REFERENCES public.tickers (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE
-        NOT VALID
+CREATE TABLE historical_prices (
+    id SERIAL PRIMARY KEY,
+    ticker_id INT NOT NULL,
+    article_id INT NOT NULL,
+    interval VARCHAR(10) NOT NULL, -- e.g. '1h', '1d'
+    price NUMERIC NOT NULL,
+    pct_change NUMERIC,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT fk_historical_prices_article FOREIGN KEY (article_id)
+        REFERENCES articles (id) ON DELETE CASCADE,
+    CONSTRAINT fk_historical_prices_ticker FOREIGN KEY (ticker_id)
+        REFERENCES tickers (id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_historical_prices_ticker_interval ON historical_prices(ticker_id, interval);
+CREATE INDEX idx_historical_prices_article_id ON historical_prices(article_id);
+

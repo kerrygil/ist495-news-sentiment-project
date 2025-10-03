@@ -8,14 +8,18 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from dotenv import load_dotenv
 
-from data.database import SessionLocal
+from data.database import SQLALCHEMY_DATABASE_URL, SessionLocal
 from models.data_models import Article, Ticker
 
 # Load environment variables
 load_dotenv()
 
+print("📡 Using DB:", SQLALCHEMY_DATABASE_URL)
+
 # Create a database session
 db = SessionLocal()
+
+print("🔑 Tickers table count before insert:", db.query(Ticker).count())
 
 # Market hours restriction
 now = datetime.now()
@@ -25,7 +29,7 @@ if now.weekday() >= 5 or now.hour < 9 or now.hour >= 16:
 
 # Load valid tickers (update path to your local finviz.csv)
 try:
-    valid_tickers = set(pd.read_csv("data/test_finviz.csv")["Ticker"])
+    valid_tickers = set(pd.read_csv("test/test_finviz.csv")["Ticker"])
 except Exception as e:
     print(f"❌ ERROR loading CSV: {e}")
     valid_tickers = set()
