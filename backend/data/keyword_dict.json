@@ -1,0 +1,25 @@
+{
+  "positive": [
+    "acquisition", "beat expectations", "bullish", "earnings surprise",
+    "outperform", "upgrade", "profit", "return", "growth", "revenue increase",
+    "strong guidance", "new product", "strategic partnership", "raise forecast",
+    "merger", "dividend increase", "expansion", "buyback", "improved margin",
+    "approval", "record revenue", "profitability", "raised outlook", "positive sentiment",
+    "surge", "exceeded forecast", "rebound", "accelerated", "optimism", "increased demand",
+    "record high", "all-time high", "target raised", "guidance boost", "solid results"
+  ],
+  "negative": [
+    "speculative buyers", "miss expectations", "loss", "bearish", "downgrade",
+    "underperform", "decline", "layoff", "debt", "lawsuit", "regulatory probe",
+    "SEC investigation", "fraud", "scandal", "lower guidance", "drop in revenue",
+    "crash", "shortfall", "volatility", "halt trading", "plunge", "dropped", "fell short",
+    "warning", "disappointing", "cut forecast", "negative outlook", "trading suspension",
+    "hit hard", "regulatory scrutiny", "cut guidance", "losses widened"
+  ],
+  "neutral": [
+    "forecast", "announcement", "market", "investor", "interest rate",
+    "inflation", "FED", "CPI", "jobs report", "stimulus", "macroeconomics",
+    "central bank", "policy decision", "bond yields", "employment data", "PPI",
+    "rate hike", "data release", "economic outlook", "fiscal policy"
+  ]
+}
