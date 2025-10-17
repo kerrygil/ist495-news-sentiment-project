@@ -92,8 +92,8 @@ def run_sentiment_pipeline(input_path, json_dict_path, csv_dict_path, output_pat
 
 if __name__ == "__main__":
     run_sentiment_pipeline(
-        input_path="backend/data/cleaned_data/articles_features.csv",
-        json_dict_path="backend/data/sentiment_dict.json",
-        csv_dict_path="backend/data/sentiment_dict.csv",
-        output_path="backend/data/cleaned_data/articles_sentiment.csv"
+        input_path="backend/data/cleaned_data/test_articles_features.csv",
+        json_dict_path="backend/data/keyword_dict.json",
+        csv_dict_path="backend/data/keyword_dict.csv",
+        output_path="backend/data/cleaned_data/test_articles_sentiment.csv"
     )

@@ -9,8 +9,8 @@ from data.sentiment_pipeline import run_sentiment_pipeline
 def test_sentiment_pipeline(tmp_path):
     # Prepare test files
     input_csv = tmp_path / "articles_features.csv"
-    json_dict = tmp_path / "sentiment_dict.json"
-    csv_dict = tmp_path / "sentiment_dict.csv"
+    json_dict = tmp_path / "keyword_dict.json"
+    csv_dict = tmp_path / "keyword_dict.csv"
     output_csv = tmp_path / "articles_sentiment.csv"
 
     # Create small test article data

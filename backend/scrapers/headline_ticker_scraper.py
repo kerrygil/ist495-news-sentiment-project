@@ -27,9 +27,13 @@ if now.weekday() >= 5 or now.hour < 9 or now.hour >= 16:
     print(f"⏱️ Skipped at {now} (outside market hours)")
     exit()
 
-# Load valid tickers (update path to your local finviz.csv)
+# Load valid tickers
 try:
-    valid_tickers = set(pd.read_csv("test/test_finviz.csv")["Ticker"])
+    finviz_df = pd.read_csv("data/finviz.csv")
+    if "Ticker" not in finviz_df.columns:
+        raise KeyError("Missing 'Ticker' column in finviz.csv")
+    valid_tickers = set(finviz_df["Ticker"].astype(str).str.strip().str.upper())
+    print(f"✅ Loaded {len(valid_tickers)} valid tickers.")
 except Exception as e:
     print(f"❌ ERROR loading CSV: {e}")
     valid_tickers = set()
@@ -53,7 +57,7 @@ for row in rows:
         skipped += 1
         continue
 
-    ticker_symbol = ticker_tag.get_text(strip=True)
+    ticker_symbol = ticker_tag.get_text(strip=True).upper()
 
     if ticker_symbol not in valid_tickers:
         skipped += 1

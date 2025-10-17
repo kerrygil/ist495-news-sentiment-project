@@ -6,7 +6,6 @@ from data.database import get_db
 import pandas as pd
 import os
 
-
 router = APIRouter()
 
 @router.get("/test-db-connection")
@@ -39,8 +38,6 @@ def get_cleaned_articles():
 
 @router.get("/articles_features")
 def get_feature_engineered_articles():
-    import os
-    import pandas as pd
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "articles_features.csv"))

@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from datetime import datetime
 from models.data_models import HistoricalPrice, Article, Ticker
-from data.database import SessionLocal
+from data.database import SessionLocal, engine
+import os
 
 def fetch_price_changes(ticker: str, published_datetime):
     """
@@ -96,9 +97,6 @@ def fetch_price_changes(ticker: str, published_datetime):
         return outs
 
 def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: dict):
-    """
-    Insert price data (interval, price, pct_change) into historical_prices.
-    """
     inserted, skipped = 0, 0
     for interval, values in price_data.items():
         try:
@@ -110,7 +108,6 @@ def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: 
                 pct_change=values["pct_change"]
             )
             db.add(hp)
-            # db.commit()
             inserted += 1
             print(f"Inserting interval={interval}, values={values}")
         except IntegrityError:
@@ -120,6 +117,8 @@ def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: 
             db.rollback()
             skipped += 1
             print(f"⚠️ Error inserting {interval} for article {article_id}: {e}")
+
+    db.commit()
 
     return inserted, skipped
 
@@ -139,3 +138,13 @@ def process_articles():
             print(f"✅ Inserted {inserted}, Skipped {skipped} for {ticker.symbol}/{article.id}")
         else:
             print(f"⚠️ No price data found for {ticker.symbol} at {article.published_at}")
+
+def export_prices_to_csv():
+    df = pd.read_sql("SELECT * FROM historical_prices", engine)
+    csv_path = os.path.join(os.path.dirname(__file__), "prices.csv")
+    df.to_csv(csv_path, index=False)
+    print(f"✅ Exported prices to {csv_path}")
+
+if __name__ == "__main__":
+    process_articles()
+    export_prices_to_csv()

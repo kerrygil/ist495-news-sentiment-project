@@ -1,0 +1,4 @@
+id,title,url,published_at,ticker_id
+1,Example,"https://test.com",2025-10-03T15:30:00,1
+2,After Hours Example,"https://test.com/2",2025-10-03T17:00:00,1
+3,Weekend Example,"https://test.com/3",2025-10-05T11:00:00,1

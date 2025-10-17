@@ -1,0 +1,2 @@
+id_x,title,url,published_at,ticker_id,id_y,article_id,price,pct_change,created_at,interval,minutes_to_price,day_of_week,hour_of_day,is_market_hours,is_premarket,is_aftermarket,hour_sin,hour_cos,abs_pct_change,log_price
+1,Example,https://test.com,2025-10-03 15:30:00,1,,,,,,,,4,15,1,0,0,-0.7071067811865471,-0.7071067811865479,,
