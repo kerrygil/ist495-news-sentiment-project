@@ -1,12 +1,7 @@
 import os
 import pandas as pd
+import numpy as np
 from nltk.sentiment import SentimentIntensityAnalyzer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-import joblib
-import csv
-
-# Ensure NLTK resources exist
 import nltk
 nltk.download("vader_lexicon", quiet=True)
 
@@ -17,15 +12,14 @@ def load_custom_dictionary(dict_path):
         with open(dict_path, "r", encoding="utf-8") as f:
             return json.load(f)
     elif dict_path.endswith(".csv"):
-        df = pd.read_csv(dict_path)
-        return df
+        return pd.read_csv(dict_path)
     else:
         raise ValueError("Unsupported dictionary format: must be .json or .csv")
 
 
 def keyword_sentiment_score(title, json_dict, csv_dict):
-    """Return sentiment label from keyword match."""
-    title_lower = title.lower()
+    """Return average sentiment score from keyword matches."""
+    title_lower = str(title).lower()
     score = 0
     count = 0
 
@@ -41,24 +35,27 @@ def keyword_sentiment_score(title, json_dict, csv_dict):
 
     # CSV dictionary
     for _, row in csv_dict.iterrows():
-        if str(row["keyword"]).lower() in title_lower:
-            sign = 1 if row["sentiment"] == "positive" else -1
-            score += sign * float(row["strength"])
+        keyword = str(row.get("keyword", "")).lower()
+        if keyword and keyword in title_lower:
+            sign = 1 if row.get("sentiment") == "positive" else -1
+            try:
+                strength = float(row.get("strength", 1))
+            except ValueError:
+                strength = 1
+            score += sign * strength
             count += 1
 
-    if count == 0:
-        return 0  # neutral if no match
-    return score / count
+    return score / count if count > 0 else 0
 
 
 def vader_sentiment(title):
-    """Use NLTK VADER sentiment."""
+    """Use NLTK VADER to generate compound sentiment score."""
     sia = SentimentIntensityAnalyzer()
-    return sia.polarity_scores(title)["compound"]
+    return sia.polarity_scores(str(title))["compound"]
 
 
 def classify_sentiment(value):
-    """Convert numeric score into label."""
+    """Convert numeric sentiment into categorical label."""
     if value > 0.05:
         return "positive"
     elif value < -0.05:
@@ -67,33 +64,54 @@ def classify_sentiment(value):
         return "neutral"
 
 
+def analyze_sentiment_price_correlation(df):
+    """Compute correlation and summarize sentiment vs price direction."""
+    corr = df["combined_score"].corr(df["pct_change"])
+    print(f"\n📊 Correlation between sentiment score and price change: {corr:.3f}")
+
+    # Basic sentiment vs movement summary
+    summary = pd.crosstab(df["sentiment_label"], np.sign(df["pct_change"]),
+                          rownames=["Sentiment"], colnames=["Price Direction"])
+    print("\n🧩 Sentiment vs Price Direction:")
+    print(summary)
+
+    return corr, summary
+
+
 def run_sentiment_pipeline(input_path, json_dict_path, csv_dict_path, output_path):
-    """Main sentiment analysis entry point."""
+    """Perform sentiment analysis and correlate with price movement."""
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Missing file: {input_path}")
 
+    print(f"Loading engineered features from {input_path}...")
     df = pd.read_csv(input_path)
+
     json_dict = load_custom_dictionary(json_dict_path)
     csv_dict = load_custom_dictionary(csv_dict_path)
 
+    print("Running sentiment analysis...")
     df["keyword_score"] = df["title"].apply(lambda x: keyword_sentiment_score(x, json_dict, csv_dict))
     df["vader_score"] = df["title"].apply(vader_sentiment)
-
-    # Combine both sources
     df["combined_score"] = df[["keyword_score", "vader_score"]].mean(axis=1)
     df["sentiment_label"] = df["combined_score"].apply(classify_sentiment)
 
+    print("Analyzing correlation with price movement...")
+    corr, summary = analyze_sentiment_price_correlation(df)
+
+    # Save output
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_csv(output_path, index=False)
 
-    print(f"✅ Sentiment data saved to {output_path}")
+    print(f"\n✅ Sentiment-annotated data saved to {output_path}")
+    print(f"Final shape: {df.shape}")
     return df
 
 
 if __name__ == "__main__":
     run_sentiment_pipeline(
-        input_path="backend/data/cleaned_data/test_articles_features.csv",
+        input_path="backend/data/cleaned_data/articles_features.csv",
         json_dict_path="backend/data/keyword_dict.json",
         csv_dict_path="backend/data/keyword_dict.csv",
-        output_path="backend/data/cleaned_data/test_articles_sentiment.csv"
+        output_path="backend/data/cleaned_data/articles_sentiment.csv"
     )
+
