@@ -1,4 +1,11 @@
 import os
+import sys
+from pathlib import Path
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
 from datetime import datetime, timedelta
 import re
 from sqlalchemy.exc import IntegrityError
@@ -8,23 +15,23 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from dotenv import load_dotenv
 
-from data.database import SQLALCHEMY_DATABASE_URL, SessionLocal
-from models.data_models import Article, Ticker
+from backend.data.database import SQLALCHEMY_DATABASE_URL, SessionLocal
+from backend.models.data_models import Article, Ticker
 
 # Load environment variables
 load_dotenv()
 
-print("📡 Using DB:", SQLALCHEMY_DATABASE_URL)
+print("Using DB:", SQLALCHEMY_DATABASE_URL)
 
 # Create a database session
 db = SessionLocal()
 
-print("🔑 Tickers table count before insert:", db.query(Ticker).count())
+print("Tickers table count before insert:", db.query(Ticker).count())
 
 # Market hours restriction
 now = datetime.now()
 if now.weekday() >= 5 or now.hour < 9 or now.hour >= 16:
-    print(f"⏱️ Skipped at {now} (outside market hours)")
+    print(f"Skipped at {now} (outside market hours)")
     exit()
 
 # Load valid tickers
@@ -35,7 +42,7 @@ try:
     valid_tickers = set(finviz_df["Ticker"].astype(str).str.strip().str.upper())
     print(f"✅ Loaded {len(valid_tickers)} valid tickers.")
 except Exception as e:
-    print(f"❌ ERROR loading CSV: {e}")
+    print(f"ERROR loading CSV: {e}")
     valid_tickers = set()
 
 # Create scraper
@@ -83,7 +90,7 @@ for row in rows:
             else:
                 timestamp = datetime.now()
         except Exception as e:
-            print(f"❌ Failed to parse time: '{time_str}' — {e}")
+            print(f"Failed to parse time: '{time_str}' — {e}")
             skipped += 1
             continue
     else:
@@ -122,16 +129,15 @@ for row in rows:
     try:
         db.commit()
         inserted += 1
-        print(f"✅ [{timestamp}] [{ticker_symbol}] {headline}")
+        print(f"[{timestamp}] [{ticker_symbol}] {headline}")
     except IntegrityError:
         db.rollback()
         skipped += 1
-        print(f"⚠️ Skipped duplicate insert for {headline}")
+        print(f"Skipped duplicate insert for {headline}")
     except Exception as e:
         db.rollback()
         skipped += 1
-        print(f"⚠️ Skipped insert due to error: {e}")
-
+        print(f"Skipped insert due to error: {e}")
 # Close DB session
 db.close()
 print(f"\nInserted: {inserted} rows")

@@ -67,16 +67,25 @@ def classify_sentiment(value):
 def analyze_sentiment_price_correlation(df):
     """Compute correlation and summarize sentiment vs price direction."""
     corr = df["combined_score"].corr(df["pct_change"])
-    print(f"\n📊 Correlation between sentiment score and price change: {corr:.3f}")
+    print(f"\nCorrelation between sentiment score and price change: {corr:.3f}")
 
     # Basic sentiment vs movement summary
     summary = pd.crosstab(df["sentiment_label"], np.sign(df["pct_change"]),
                           rownames=["Sentiment"], colnames=["Price Direction"])
-    print("\n🧩 Sentiment vs Price Direction:")
+    print("\nSentiment vs Price Direction:")
     print(summary)
 
     return corr, summary
 
+def label_agreement(row):
+    if row["sentiment_label"] == "neutral":
+        return "neutral"
+    elif row["sentiment_label"] == "positive" and row["pct_change"] > 0:
+        return "agree"
+    elif row["sentiment_label"] == "negative" and row["pct_change"] < 0:
+        return "agree"
+    else:
+        return "disagree"
 
 def run_sentiment_pipeline(input_path, json_dict_path, csv_dict_path, output_path):
     """Perform sentiment analysis and correlate with price movement."""
@@ -94,6 +103,7 @@ def run_sentiment_pipeline(input_path, json_dict_path, csv_dict_path, output_pat
     df["vader_score"] = df["title"].apply(vader_sentiment)
     df["combined_score"] = df[["keyword_score", "vader_score"]].mean(axis=1)
     df["sentiment_label"] = df["combined_score"].apply(classify_sentiment)
+    df["sentiment_price_agreement"] = df.apply(label_agreement, axis=1)
 
     print("Analyzing correlation with price movement...")
     corr, summary = analyze_sentiment_price_correlation(df)
@@ -102,7 +112,7 @@ def run_sentiment_pipeline(input_path, json_dict_path, csv_dict_path, output_pat
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_csv(output_path, index=False)
 
-    print(f"\n✅ Sentiment-annotated data saved to {output_path}")
+    print(f"\nSentiment-annotated data saved to {output_path}")
     print(f"Final shape: {df.shape}")
     return df
 

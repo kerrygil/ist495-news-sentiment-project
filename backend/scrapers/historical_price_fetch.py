@@ -1,12 +1,19 @@
+import os
+import sys
+from pathlib import Path
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
 import yfinance as yf
 from datetime import timedelta
 import pandas as pd
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from datetime import datetime
-from models.data_models import HistoricalPrice, Article, Ticker
-from data.database import SessionLocal, engine
-import os
+from backend.models.data_models import HistoricalPrice, Article, Ticker
+from backend.data.database import SessionLocal, engine
 
 def fetch_price_changes(ticker: str, published_datetime):
     """
@@ -68,7 +75,7 @@ def fetch_price_changes(ticker: str, published_datetime):
         return outs
 
     except Exception as e:
-        print(f"⚠️ Intraday fetch failed ({e}), falling back to daily data")
+        print(f"Intraday fetch failed ({e}), falling back to daily data")
 
         # Fallback to daily
         df = yf.download(ticker, period="1y", interval="1d", progress=False, auto_adjust=True)
@@ -99,6 +106,17 @@ def fetch_price_changes(ticker: str, published_datetime):
 def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: dict):
     inserted, skipped = 0, 0
     for interval, values in price_data.items():
+        existing = db.query(HistoricalPrice).filter_by(
+            ticker_id=ticker_id,
+            article_id=article_id,
+            interval=interval
+        ).first()
+
+        if existing:
+            print(f"Skipping existing interval={interval} for article {article_id}")
+            skipped += 1
+            continue
+
         try:
             hp = HistoricalPrice(
                 ticker_id=ticker_id,
@@ -116,7 +134,7 @@ def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: 
         except Exception as e:
             db.rollback()
             skipped += 1
-            print(f"⚠️ Error inserting {interval} for article {article_id}: {e}")
+            print(f"Error inserting {interval} for article {article_id}: {e}")
 
     db.commit()
 
@@ -125,25 +143,31 @@ def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: 
 def process_articles():
     db = SessionLocal()
     articles = db.query(Article).all()
+
     for article in articles:
+        has_prices = db.query(HistoricalPrice).filter_by(article_id=article.id).first()
+        if has_prices:
+            print(f"Prices already exist for article {article.id}, skipping.")
+            continue
+
         ticker = db.query(Ticker).get(article.ticker_id)
         if not ticker:
             continue
 
-        print(f"🔎 Fetching prices for {ticker.symbol} around {article.published_at}")
+        print(f"Fetching prices for {ticker.symbol} around {article.published_at}")
         price_data = fetch_price_changes(ticker.symbol, article.published_at)
 
         if price_data:
             inserted, skipped = insert_price_data(db, ticker.id, article.id, price_data)
-            print(f"✅ Inserted {inserted}, Skipped {skipped} for {ticker.symbol}/{article.id}")
+            print(f"Inserted {inserted}, Skipped {skipped} for {ticker.symbol}/{article.id}")
         else:
-            print(f"⚠️ No price data found for {ticker.symbol} at {article.published_at}")
+            print(f"No price data found for {ticker.symbol} at {article.published_at}")
 
 def export_prices_to_csv():
     df = pd.read_sql("SELECT * FROM historical_prices", engine)
     csv_path = os.path.join(os.path.dirname(__file__), "prices.csv")
     df.to_csv(csv_path, index=False)
-    print(f"✅ Exported prices to {csv_path}")
+    print(f"Exported prices to {csv_path}")
 
 if __name__ == "__main__":
     process_articles()

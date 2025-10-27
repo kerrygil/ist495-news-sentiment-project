@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, Numeric, String, Text, ForeignKey, Float, DateTime, func
 from sqlalchemy.orm import relationship
-from data.database import Base 
+from backend.data.database import Base 
 
 class Ticker(Base):
     __tablename__ = 'tickers'
