@@ -1,11 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
+from unittest import result
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func, text
 from backend.models import data_models
-from backend.models.data_models import Ticker
+from backend.models.data_models import HistoricalPrice, Ticker, Article
 from backend.data.database import get_db
+from backend.app.utils import orm_to_dict, sanitize_floats, try_float
 import pandas as pd
 import os
+import importlib
+from decimal import Decimal
+import numpy as np
 import subprocess
 import sys
 
@@ -44,8 +51,7 @@ def get_cleaned_articles():
     return {"cleaned_articles": data}
 
 @router.get("/aggregated_features")
-def get_aggregated_features():
-    """Return aggregated sentiment–price correlation data."""
+def get_aggregated_features(db: Session = Depends(get_db)):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "features_aggregated.csv"))
 
@@ -54,13 +60,37 @@ def get_aggregated_features():
 
     df = pd.read_csv(csv_path)
 
+    # get ticker IDs and symbols
+    tickers = db.query(Ticker.id, Ticker.symbol, Ticker.company_name).all()
+    ticker_df = pd.DataFrame(tickers, columns=["ticker_id", "ticker", "company_name"])
+
+    # get accurate article counts from the database
+    article_counts = (
+        db.query(Article.ticker_id, func.count(Article.id).label("article_count"))
+        .group_by(Article.ticker_id)
+        .all()
+    )
+    article_count_df = pd.DataFrame(article_counts, columns=["ticker_id", "article_count"])
+
+    # merge everything
+    df = df.merge(ticker_df, on="ticker_id", how="left")
+    df = df.merge(article_count_df, on="ticker_id", how="left")
+
+    # rename for consistency with frontend expectations
+    df = df.rename(columns={
+        "combined_score": "avg_combined_score"
+    })
+
+    # fill NaNs (in case some tickers have 0 articles)
+    df["article_count"] = df["article_count"].fillna(0).astype(int)
+
     return {
         "records": df.to_dict(orient="records"),
         "summary": {
-            "total_articles": len(df),
+            "total_articles": int(df["article_count"].sum()),
             "accurate": int((df["sentiment_price_correlation"] == "accurate").sum()),
             "inconclusive": int((df["sentiment_price_correlation"] == "inconclusive").sum()),
-            "neutral": int((df["sentiment_price_correlation"] == "neutral").sum())
+            "neutral": int((df["sentiment_price_correlation"] == "neutral").sum()),
         }
     }
 
@@ -107,6 +137,7 @@ def get_tickers_summary():
 
     return {"ticker_summary": summary.to_dict(orient="records")}
 
+'''
 @router.post("/refresh_data")
 def refresh_data():
     """Run the full data pipeline in order."""
@@ -124,8 +155,9 @@ def refresh_data():
             subprocess.run(
                 [sys.executable, "-m", script],
                 check=True,
-                capture_output=True,
-                text=True
+                # capture_output=True,
+                text=True,
+                env=os.environ.copy
             )
         return {"status": "success", "message": "Pipeline re-run successfully."}
     except subprocess.CalledProcessError as e:
@@ -133,39 +165,60 @@ def refresh_data():
             status_code=500,
             detail=f"Pipeline failed while running {script}: {e.stderr or e}"
         )
-    
+'''
+
+@router.post("/refresh_data")
+def refresh_data():
+    scripts = [
+        "backend.scrapers.headline_ticker_scraper",
+        "backend.scrapers.historical_price_fetch",
+        "backend.data.cleaning_pipeline",
+        "backend.data.feature_engineering",
+        "backend.data.sentiment_pipeline",
+        "backend.data.aggregate_sentiment",
+    ]
+
+    for module_name in scripts:
+        print(f"Running {module_name}...")
+        mod = importlib.import_module(module_name)
+        if hasattr(mod, "main"):
+            mod.main()
+        else:
+            raise Exception(f"{module_name} has no main() function.")
+    return {"status": "success", "message": "Pipeline re-run successfully."}
+
 @router.get("/tickers/search")
-def search_tickers_with_sentiment(
-    q: str = Query(..., description="Search query (e.g., AAPL or Apple)"),
+def search_ticker_full(
+    q: str = Query(..., description="Search by ticker symbol or company name"),
     db: Session = Depends(get_db),
 ):
     """
-    Search tickers by symbol or name and return aggregated sentiment metrics.
-    Combines CSV sentiment data with DB ticker info.
+    Search a ticker and return:
+      - summary metrics (article count, averages)
+      - full per-article sentiment breakdown (from aggregated CSV)
+      - headline/url/published_at from DB
     """
 
     import pandas as pd
     import os
 
-    # Load aggregated CSV
     base_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "features_aggregated.csv"))
 
     if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail="Aggregated features file not found. Run pipeline first.")
+        raise HTTPException(status_code=404, detail="Aggregated features file not found")
 
     df = pd.read_csv(csv_path)
 
-    # Load ticker mappings from the database
+    # Load ticker metadata
     tickers = db.query(data_models.Ticker).all()
     ticker_map = {t.id: t.symbol for t in tickers}
     name_map = {t.id: t.company_name for t in tickers}
 
-    # Add symbol and name columns to the DataFrame
     df["ticker_symbol"] = df["ticker_id"].map(ticker_map)
     df["ticker_name"] = df["ticker_id"].map(name_map)
 
-    # Filter by symbol or name (case-insensitive)
+    # Filter by symbol OR company name
     filtered = df[
         df["ticker_symbol"].str.contains(q, case=False, na=False)
         | df["ticker_name"].str.contains(q, case=False, na=False)
@@ -174,22 +227,249 @@ def search_tickers_with_sentiment(
     if filtered.empty:
         raise HTTPException(status_code=404, detail=f"No sentiment data found for '{q}'")
 
-    # Aggregate sentiment metrics
+    ticker_id = int(filtered["ticker_id"].iloc[0])
+    symbol = filtered["ticker_symbol"].iloc[0]
+    name = filtered["ticker_name"].iloc[0]
+
     sentiment_summary = {
-        "ticker": filtered["ticker_symbol"].iloc[0],
-        "name": filtered["ticker_name"].iloc[0],
         "article_count": int(filtered["id"].nunique()) if "id" in filtered.columns else len(filtered),
-        "avg_combined_score": round(filtered["combined_score"].mean(), 4)
-        if "combined_score" in filtered.columns
-        else None,
+        "avg_pct_change": round(float(filtered["pct_change"].mean()), 4)
+            if "pct_change" in filtered.columns else None,
+        "avg_relative_volume": round(float(filtered["relative_volume"].mean()), 4)
+            if "relative_volume" in filtered.columns else None,
+        "avg_combined_score": round(float(filtered["combined_score"].mean()), 4)
+            if "combined_score" in filtered.columns else None,
         "agreement_rate": round(
             (filtered["sentiment_price_agreement"].eq("accurate").sum() / len(filtered)) * 100, 2
-        )
-        if "sentiment_price_agreement" in filtered.columns
-        else None,
+        ) if "sentiment_price_agreement" in filtered.columns else None,
     }
 
-    return {
-        "summary": sentiment_summary,
-        "records": filtered.head(15).to_dict(orient="records"),
+    # 1. Pull DB metadata for articles belonging to this ticker
+    db_articles = (
+        db.query(data_models.Article)
+        .filter(data_models.Article.ticker_id == ticker_id)
+        .all()
+    )
+
+    # Map article_id → DB fields
+    db_map = {
+        a.id: {
+            "headline": a.title,
+            "published_at": a.published_at.isoformat() if a.published_at else None,
+            "url": a.url,
+        }
+        for a in db_articles
     }
+
+    # 2. Filter CSV rows belonging to this ticker
+    per_article_rows = filtered.sort_values("published_at", ascending=False)
+
+    # 3. Merge CSV sentiment rows with DB fields
+    articles = []
+    for _, row in per_article_rows.iterrows():
+        aid = int(row["id"]) if "id" in row else None
+
+        # DB metadata lookup
+        meta = db_map.get(aid, {"headline": None, "published_at": None, "url": None})
+
+        articles.append({
+            "article_id": aid,
+            "headline": meta["headline"],
+            "url": meta["url"],
+            "published_at": meta["published_at"],
+            "combined_score": float(row["combined_score"]) if "combined_score" in row else None,
+            "pct_change": float(row["pct_change"]) if "pct_change" in row else None,
+            "relative_volume": float(row["relative_volume"]) if "relative_volume" in row else None,
+            "sentiment_price_agreement": row.get("sentiment_price_agreement", None),
+        })
+
+    return {
+        "symbol": symbol,
+        "company_name": name,
+        "summary": sentiment_summary,
+        "articles": articles,
+    }
+
+@router.get("/recent_articles")
+def get_recent_articles(
+    page: int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=100),
+    ticker: Optional[str] = Query(None, description="Optional ticker symbol filter, e.g. NVDA"),
+    sort_by: Optional[str] = Query("published_at", description="Field to sort by: 'published_at' or 'combined_score'"),
+    order: Optional[str] = Query("desc", description="Sort order: 'asc' or 'desc'"),
+    db: Session = Depends(get_db),
+):
+    """
+    Return recent article-level sentiment rows (joined with ticker symbol/company_name).
+    Supports sorting and pagination.
+    """
+    import numpy as np
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "articles_sentiment.csv"))
+
+    if not os.path.exists(csv_path):
+        raise HTTPException(status_code=404, detail=f"Article sentiment file not found: {csv_path}")
+
+    try:
+        df = pd.read_csv(
+            csv_path,
+            converters={
+                "price": lambda x: try_float(x),
+                "pct_change": lambda x: try_float(x),
+                "abs_pct_change": lambda x: try_float(x),
+                "minutes_to_price": lambda x: try_float(x),
+                "relative_volume": lambda x: try_float(x),
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read CSV: {e}")
+
+    # Ensure key columns
+    if "ticker_id" not in df.columns or "headline" not in df.columns:
+        raise HTTPException(status_code=500, detail="CSV missing required columns: 'ticker_id' or 'headline'")
+
+    # Parse timestamps
+    if "published_at" in df.columns:
+        df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
+    else:
+        df["published_at"] = pd.NaT
+
+    # Join with ticker info
+    tickers = db.query(Ticker.id, Ticker.symbol, Ticker.company_name).all()
+    ticker_df = pd.DataFrame(tickers, columns=["ticker_id", "symbol", "company_name"])
+    df = df.merge(ticker_df, on="ticker_id", how="left")
+
+    # Drop duplicate articles if needed
+    if "id" in df.columns:
+        df = df.sort_values("published_at", ascending=False)
+        df = df.drop_duplicates(subset=["id"], keep="first")
+
+    # Filter by ticker
+    if ticker:
+        t_up = ticker.strip().upper()
+        df = df[df["symbol"].astype(str).str.upper() == t_up]
+
+    # Sorting logic
+    ascending = order.lower() == "asc"
+    valid_sort_cols = ["published_at", "combined_score", "pct_change", "relative_volume"]
+
+    if sort_by not in valid_sort_cols:
+        sort_by = "published_at"
+
+    if sort_by in ["combined_score", "pct_change", "relative_volume"]:
+        df[sort_by] = pd.to_numeric(df[sort_by], errors="coerce").fillna(0)
+        df = df.sort_values(by=sort_by, ascending=ascending, na_position="last")
+    else:
+        # Date sorting
+        df = df.sort_values(by="published_at", ascending=ascending, na_position="last")
+
+    # Pagination
+    total = len(df)
+    start = (page - 1) * limit
+    end = start + limit
+    page_df = df.iloc[start:end]
+
+    # Convert rows for JSON
+    def recordify(row):
+        r = row.to_dict()
+
+        # Fix datetime fields
+        pub = r.get("published_at")
+        if pub:
+            try:
+                r["published_at"] = pd.to_datetime(pub).isoformat()
+            except:
+                r["published_at"] = None
+        else:
+            r["published_at"] = None
+
+        # Convert ALL numeric types safely
+        for k, v in r.items():
+            # None stays None
+            if v is None:
+                continue
+
+            # numpy numbers
+            if isinstance(v, (np.integer, np.floating)):
+                r[k] = None if pd.isna(v) else float(v)
+                continue
+
+            # Decimal (SQLAlchemy often returns these!)
+            if isinstance(v, Decimal):
+                r[k] = float(v)
+                continue
+
+            # strings that should be floats
+            if isinstance(v, str):
+                try:
+                    cleaned = v.replace("%", "").replace(",", "")
+                    r[k] = float(cleaned)
+                except:
+                    pass
+
+        return r
+
+
+    response = {
+        "page": page,
+        "limit": limit,
+        "total_records": total,
+        "records": [recordify(r) for _, r in page_df.iterrows()],
+    }
+
+    # Clean NaN / Inf / -Inf values before sending JSON
+    return sanitize_floats(response)
+
+
+
+@router.get("/analytics/ticker-performance-3d")
+def get_ticker_performance_3d(limit: int = 20, db: Session = Depends(get_db)):
+
+    CSV_PATH = "backend/data/cleaned_data/features_aggregated.csv"
+    df = pd.read_csv(CSV_PATH)
+
+    # Safety: ensure combined_score exists
+    if "combined_score" not in df.columns or "ticker_id" not in df.columns:
+        return {"error": "CSV missing required columns combined_score or ticker_id"}
+
+    # Compute average sentiment per ticker_id
+    sentiment_map = (
+        df.groupby("ticker_id")["combined_score"]
+        .mean()
+        .fillna(0)
+        .to_dict()
+    )
+
+    price_stats = (
+        db.query(
+            HistoricalPrice.ticker_id,
+            func.avg(HistoricalPrice.pct_change).label("avg_pct_change"),
+            func.avg(HistoricalPrice.relative_volume).label("avg_relative_volume")
+        )
+        .group_by(HistoricalPrice.ticker_id)
+        .order_by(func.avg(HistoricalPrice.relative_volume).desc())
+        
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+
+    for row in price_stats:
+        tid = row.ticker_id
+        symbol = db.query(Ticker.symbol).filter(Ticker.id == tid).scalar()
+
+        results.append({
+            "ticker_id": tid,
+            "symbol": symbol,
+            "pct_change": float(row.avg_pct_change or 0),
+            "relative_volume": float(row.avg_relative_volume or 0),
+            "sentiment": float(sentiment_map.get(tid, 0)),
+        })
+
+    return {
+        "count": len(results),
+        "data": results
+    }
+

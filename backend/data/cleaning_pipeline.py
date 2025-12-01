@@ -27,6 +27,8 @@ def clean_articles(df):
     """Clean the article titles by lowercasing and removing special characters."""
     if "title" not in df.columns:
         raise ValueError("Missing 'title' column in DataFrame.")
+    
+    df["headline"] = df["title"].astype(str)
 
     df["title"] = (
         df["title"]
@@ -36,7 +38,17 @@ def clean_articles(df):
     )
     return df
 
-if __name__ == "__main__":
+def separate_url_and_date(url_field):
+    # Match URLs ending with a date (with or without a space or timestamp)
+    match = re.search(r'(https?://[^\s]+?)(?:\s+|,)?(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?)?$', str(url_field))
+    if match:
+        url = match.group(1)
+        date = match.group(2)
+        return url, date
+    return url_field, None
+
+def main():
+    """Main function to load, clean, and save articles."""
     articles_df = load_articles()
     cleaned_df = clean_articles(articles_df)
 
@@ -47,3 +59,5 @@ if __name__ == "__main__":
     cleaned_df.to_csv("backend/data/cleaned_data/articles_cleaned.csv", index=False)
     print("Cleaned data saved to backend/data/cleaned_data/articles_cleaned.csv")
 
+if __name__ == "__main__":
+    main()

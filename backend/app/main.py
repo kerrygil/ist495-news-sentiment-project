@@ -1,9 +1,27 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app import routes
-from backend.data.database import Base, engine
+from fastapi.responses import JSONResponse
+from backend.app import routes, debug_router
+from backend.data.database import Base, engine, SessionLocal
+from backend.data.cleanup_old_articles import delete_old_articles
+from backend.app.utils import sanitize_floats
+from backend.app.scheduler import scheduler, start_scheduler
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup actions
+    db = SessionLocal()
+    try:
+        deleted = delete_old_articles(db, days=2)
+        print(f"Cleanup complete: deleted {deleted} old articles.")
+    finally:
+        db.close()
+    print("Starting scheduled pipeline...")
+    start_scheduler()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
@@ -15,7 +33,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def sanitize_json_responses(request: Request, call_next):
+    response = await call_next(request)
+    if isinstance(response, JSONResponse) and isinstance(response.body, (bytes, bytearray)):
+        try:
+            import json
+            content = json.loads(response.body)
+            sanitized = sanitize_floats(content)
+            return JSONResponse(sanitized, status_code=response.status_code)
+        except Exception:
+            # fall back to original response if parsing fails
+            return response
+    return response
+
 app.include_router(routes.router)
+app.include_router(debug_router.router)
 
 Base.metadata.create_all(bind=engine)
-

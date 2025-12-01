@@ -1,59 +1,153 @@
-import pandas as pd
+import os
 import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
 
 def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Generate basic temporal context features."""
-    df['published_at'] = pd.to_datetime(df['published_at'], errors='coerce')
-    df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
+    # Dates are already filtered — just make features
+    df['published_at'] = (
+        pd.to_datetime(df['published_at'], errors='coerce', utc=True)
+        .dt.tz_convert('America/New_York')
+        .dt.tz_localize(None)
+    )
+    df['created_at'] = (
+        pd.to_datetime(df['created_at'], errors='coerce', utc=True)
+        .dt.tz_convert('America/New_York')
+        .dt.tz_localize(None)
+    )
 
-    # Time difference between article and recorded price
     df['minutes_to_price'] = (df['created_at'] - df['published_at']).dt.total_seconds() / 60
-
-    # Basic time context
-    df['day_of_week'] = df['published_at'].dt.dayofweek  # Monday = 0
+    df['day_of_week'] = df['published_at'].dt.dayofweek
     df['hour_of_day'] = df['published_at'].dt.hour
 
-    # Market context flags
-    is_weekday = (df['day_of_week'] < 5)
+    pub_times = df['published_at'].dt.time
     df['is_market_hours'] = (
-        is_weekday &
-        (df['published_at'].dt.time >= pd.to_datetime('09:30').time()) &
-        (df['published_at'].dt.time <= pd.to_datetime('16:00').time())
-    ).astype(int)
+        (df['day_of_week'] < 5)
+        & (pub_times >= pd.to_datetime('09:30').time())
+        & (pub_times <= pd.to_datetime('16:00').time())
+    ).astype(int).fillna(0)
 
     df['is_aftermarket'] = (
-        is_weekday &
-        (df['published_at'].dt.time > pd.to_datetime('16:00').time()) &
-        (df['published_at'].dt.time <= pd.to_datetime('20:00').time())
-    ).astype(int)
+        (df['day_of_week'] < 5)
+        & (pub_times > pd.to_datetime('16:00').time())
+        & (pub_times <= pd.to_datetime('20:00').time())
+    ).astype(int).fillna(0)
 
     return df
 
 
 def feature_engineering(articles_path, prices_path, output_path):
-    """Merge article and price data and generate engineered features."""
     print("Loading input data...")
+    articles_df = pd.read_csv(articles_path, dtype=str)
+    prices_df = pd.read_csv(prices_path, dtype=str)
 
-    articles_df = pd.read_csv(articles_path)
-    prices_df = pd.read_csv(prices_path)
+    print(f"Raw Articles rows: {len(articles_df)}")
+    print(f"Raw Prices rows:   {len(prices_df)}")
 
-    print(f"Articles: {len(articles_df)} rows")
-    print(f"Prices: {len(prices_df)} rows")
+    # Parse datetimes with UTC to avoid mixed tz warnings
+    articles_df["published_at"] = pd.to_datetime(articles_df["published_at"], errors="coerce", utc=True)
+    prices_df["created_at"] = pd.to_datetime(prices_df["created_at"], errors="coerce", utc=True)
 
-    # Merge article and price data on ticker/article relationship
+    # Define cutoff in UTC to match parsed datetimes
+    cutoff_date = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=2)
+
+    # Filter to only recent data (compare UTC-to-UTC)
+    articles_df = articles_df[articles_df["published_at"] >= cutoff_date]
+    prices_df = prices_df[prices_df["created_at"] >= cutoff_date]
+
+    print(f"\nFiltered to only include data from {cutoff_date.tz_convert('America/New_York'):%Y-%m-%d %H:%M %Z} onwards")
+    print(f"Remaining Articles: {len(articles_df)}, Prices: {len(prices_df)}\n")
+
+    # Optional: remove tz before continuing, since downstream code assumes naive timestamps
+    articles_df["published_at"] = articles_df["published_at"].dt.tz_localize(None)
+    prices_df["created_at"] = prices_df["created_at"].dt.tz_localize(None)
+
+    print(f"\nFiltered to only include data from {cutoff_date:%Y-%m-%d} onwards")
+    print(f"Remaining Articles: {len(articles_df)}, Prices: {len(prices_df)}\n")
+
+    # Ensure expected columns exist
+    for col in ["id", "ticker_id", "published_at"]:
+        if col not in articles_df.columns:
+            raise RuntimeError(f"Articles CSV missing column: {col}")
+
+    for col in ["article_id", "ticker_id", "created_at", "price", "pct_change", "relative_volume"]:
+        if col not in prices_df.columns:
+            # not fatal — warn so you can inspect
+            print(f"Warning: Prices CSV missing column: {col} (this may be expected for some runs)")
+
+    # Convert ids and numeric fields to proper types (coerce errors)
+    articles_df["id"] = pd.to_numeric(articles_df["id"], errors="coerce").astype("Int64")
+    articles_df["ticker_id"] = pd.to_numeric(articles_df["ticker_id"], errors="coerce").astype("Int64")
+
+    prices_df["article_id"] = pd.to_numeric(prices_df["article_id"], errors="coerce").astype("Int64")
+    prices_df["ticker_id"] = pd.to_numeric(prices_df["ticker_id"], errors="coerce").astype("Int64")
+
+    # parse datetimes safely
+    if "published_at" in articles_df.columns:
+        articles_df["published_at"] = pd.to_datetime(articles_df["published_at"], errors="coerce")
+    if "created_at" in prices_df.columns:
+        prices_df["created_at"] = pd.to_datetime(prices_df["created_at"], errors="coerce")
+
+    # numeric columns in prices
+    for numcol in ["price", "pct_change", "relative_volume"]:
+        if numcol in prices_df.columns:
+            prices_df[numcol] = pd.to_numeric(prices_df[numcol], errors="coerce")
+
+    print("Post-parsing dtypes (articles):")
+    print(articles_df.dtypes)
+    print("Post-parsing dtypes (prices):")
+    print(prices_df.dtypes)
+
+    # Merge with indicator to see unmatched rows
     merged_df = pd.merge(
         articles_df,
         prices_df,
         how='left',
         left_on=['id', 'ticker_id'],
-        right_on=['article_id', 'ticker_id']
+        right_on=['article_id', 'ticker_id'],
+        indicator=True,
     )
 
-    # Drop redundant columns
-    merged_df.drop(columns=[col for col in ['id_y', 'article_id'] if col in merged_df.columns], inplace=True)
-    merged_df.rename(columns={'id_x': 'id'}, inplace=True)
+    # Diagnostics
+    total_left = len(merged_df)
+    matched = (merged_df["_merge"] == "both").sum()
+    left_only = (merged_df["_merge"] == "left_only").sum()
+    right_only = (merged_df["_merge"] == "right_only").sum()  # should be 0 because left join
 
-    # Add engineered features
+    print(f"Merged rows: {total_left} (matched={matched}, left_only={left_only}, right_only={right_only})")
+
+    if left_only > 0:
+        # Save a sample of unmatched articles so you can inspect why
+        unmatched = merged_df[merged_df["_merge"] == "left_only"].copy()
+        diagnostic_path = os.path.join(os.path.dirname(output_path), "merge_unmatched.csv")
+        # Keep helpful columns for debugging
+        cols_to_save = [c for c in ["id", "title", "ticker_id", "published_at", "url", "article_id", "created_at"] if c in unmatched.columns]
+        unmatched[cols_to_save].to_csv(diagnostic_path, index=False)
+        print(f"Saved {len(unmatched)} left-only rows to {diagnostic_path} for inspection")
+
+    # Drop merge indicator and handle ids properly
+    if "_merge" in merged_df.columns:
+        merged_df.drop(columns=["_merge"], inplace=True)
+
+    # If duplicate id_x or article_id columns exist, tidy them
+    if "id_x" in merged_df.columns:
+        merged_df.rename(columns={"id_x": "id"}, inplace=True)
+    if "id_y" in merged_df.columns:
+        # id_y likely came from prices - remove it to avoid confusion
+        merged_df.drop(columns=["id_y"], inplace=True)
+    if "article_id" in merged_df.columns and "article_id" not in merged_df.columns:
+        pass
+
+    # Ensure required fields exist so create_time_features doesn't crash
+    if "created_at" not in merged_df.columns:
+        merged_df["created_at"] = pd.NaT
+
+    # Convert numeric columns for feature calc
+    for numcol in ["pct_change", "price", "relative_volume"]:
+        if numcol in merged_df.columns:
+            merged_df[numcol] = pd.to_numeric(merged_df[numcol], errors="coerce")
+
+    # Now add engineered features
     merged_df = create_time_features(merged_df)
 
     # Price movement and direction
@@ -66,22 +160,26 @@ def feature_engineering(articles_path, prices_path, output_path):
         'id', 'title', 'ticker_id', 'published_at', 'price', 'pct_change',
         'abs_pct_change', 'price_direction',
         'minutes_to_price', 'day_of_week', 'hour_of_day',
-        'is_market_hours', 'is_aftermarket'
+        'relative_volume', 'is_market_hours', 'is_aftermarket', 'headline'
     ]
+    keep_cols = [c for c in keep_cols if c in merged_df.columns]  # be defensive
 
-    merged_df = merged_df[keep_cols]
+    final_df = merged_df[keep_cols].copy()
 
     # Save result
-    merged_df.to_csv(output_path, index=False)
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    final_df.to_csv(output_path, index=False)
     print(f"Feature-engineered data saved to: {output_path}")
-    print(f"Final shape: {merged_df.shape}")
+    print(f"Final shape: {final_df.shape}")
 
-
-if __name__ == "__main__":
+def main():
     feature_engineering(
         "backend/data/cleaned_data/articles_cleaned.csv",
         "backend/scrapers/prices.csv",
         "backend/data/cleaned_data/articles_features.csv"
     )
+
+if __name__ == "__main__":
+    main()
 
 

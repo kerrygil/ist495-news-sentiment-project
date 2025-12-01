@@ -39,6 +39,7 @@ class HistoricalPrice(Base):
     price = Column(Numeric, nullable=False)
     pct_change = Column(Numeric)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    relative_volume = Column(Float)
     
     article = relationship("Article", back_populates="historical_prices")
     ticker = relationship("Ticker", back_populates="historical_prices")
