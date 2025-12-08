@@ -4,6 +4,7 @@ accommodative,positive,1
 acquisition,positive,1.2
 AI,positive,1
 ai breakthrough,positive,1.5
+ai bubble,negative,1.2
 alliance,positive,1
 all-time high,positive,1.5
 approval,positive,1.2
@@ -27,6 +28,7 @@ buyout,positive,1
 cash burn,negative,1
 cash generation,positive,1
 cash injection,positive,1
+casualty,negative,1
 central bank support,positive,1
 chip demand,positive,1
 cloud expansion,positive,1.3
@@ -59,6 +61,7 @@ delay,negative,1
 digital transformation,positive,1
 disappointing,negative,1.3
 disruption,negative,1
+dividend,positive,1
 dividend cut,negative,1
 dividend hike,positive,1
 dividend increase,positive,1.2

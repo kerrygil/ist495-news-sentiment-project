@@ -2,7 +2,6 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import Optional
 import pandas as pd
 import os
-import json
 import nltk
 nltk.download("vader_lexicon", quiet=True)
 from nltk.sentiment import SentimentIntensityAnalyzer
@@ -61,47 +60,19 @@ def vader_breakdown(text: str):
 
 # --- reuse or re-implement your dictionary loader ---
 def load_custom_dictionary(dict_path):
-    if dict_path.endswith(".json"):
-        with open(dict_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    elif dict_path.endswith(".csv"):
+    if dict_path.endswith(".csv"):
         return pd.read_csv(dict_path)
     else:
-        raise ValueError("Unsupported dictionary format: must be .json or .csv")
+        raise ValueError("Unsupported dictionary format: must be .csv")
 
 # --- compute keyword breakdown for one title ---
-def keyword_breakdown_tokens(clean_title, json_dict, csv_dict):
+def keyword_breakdown_tokens(clean_title, csv_dict):
     """Token-based keyword scoring + full debug breakdown."""
     tokens = set(clean_title.split())  # title is already cleaned by your pipeline
 
     matches = []
     score = 0
     count = 0
-
-    # JSON dict
-    for word in json_dict.get("positive", []):
-        if word in tokens:
-            matches.append({
-                "word": word,
-                "source": "json_positive",
-                "sign": +1,
-                "strength": 1,
-                "contribution": 1
-            })
-            score += 1
-            count += 1
-
-    for word in json_dict.get("negative", []):
-        if word in tokens:
-            matches.append({
-                "word": word,
-                "source": "json_negative",
-                "sign": -1,
-                "strength": 1,
-                "contribution": -1
-            })
-            score -= 1
-            count += 1
 
     # CSV dict (keyword, sentiment, strength)
     for _, row in csv_dict.iterrows():
@@ -133,8 +104,7 @@ def debug_keyword_influence(
 ):
     # paths - adjust to your project
     agg_csv = os.path.join(os.path.dirname(__file__), "..", "data", "cleaned_data", "articles_features.csv")
-    json_dict_path = os.path.join(os.path.dirname(__file__), "..", "data", "keyword_dict.json")
-    csv_dict_path = os.path.join(os.path.dirname(__file__), "..", "data", "keyword_dict.csv")
+    csv_dict_path = os.path.join(os.path.dirname(__file__), "..", "data", "weighted-keyword-dict.csv")
 
     # load data
     if not os.path.exists(agg_csv):
@@ -155,7 +125,6 @@ def debug_keyword_influence(
             df = df.head(limit)
 
     # load dictionaries
-    json_dict = load_custom_dictionary(json_dict_path) if os.path.exists(json_dict_path) else {"positive": [], "negative": []}
     csv_dict = load_custom_dictionary(csv_dict_path) if os.path.exists(csv_dict_path) else pd.DataFrame(columns=["keyword","sentiment","strength"])
     if isinstance(csv_dict, pd.DataFrame) and "keyword" not in csv_dict.columns:
         # defensive: try to guess column names
@@ -165,7 +134,7 @@ def debug_keyword_influence(
     for _, row in df.iterrows():
         tokens = row["headline"].split()
 
-        kscore, kmatches = keyword_breakdown_tokens(row["headline"], json_dict, csv_dict)
+        kscore, kmatches = keyword_breakdown_tokens(row["headline"], csv_dict)
 
         hit_words = [m["word"] for m in kmatches]
 

@@ -218,11 +218,28 @@ def search_ticker_full(
     df["ticker_symbol"] = df["ticker_id"].map(ticker_map)
     df["ticker_name"] = df["ticker_id"].map(name_map)
 
-    # Filter by symbol OR company name
-    filtered = df[
-        df["ticker_symbol"].str.contains(q, case=False, na=False)
-        | df["ticker_name"].str.contains(q, case=False, na=False)
-    ]
+    # Validate query
+    q_trim = str(q).strip()
+    if not q_trim:
+        raise HTTPException(status_code=400, detail="Query 'q' must not be empty")
+
+    q_up = q_trim.upper()
+    sym_col = df["ticker_symbol"].fillna("").astype(str)
+    name_col = df["ticker_name"].fillna("").astype(str)
+
+    symbol_exact = sym_col.str.upper() == q_up
+    symbol_prefix = sym_col.str.upper().str.startswith(q_up)
+    # Use regex=False to avoid interpreting regex meta-characters in 'q'
+    name_contains = name_col.str.contains(q_trim, case=False, regex=False, na=False)
+
+    # Prefer symbol matches (exact or prefix). Only fallback to name search when
+    # there are no symbol matches. This prevents queries like "MET" matching a
+    # company with "metal" in the name.
+    symbol_mask = symbol_exact | symbol_prefix
+    if symbol_mask.any():
+        filtered = df[symbol_mask]
+    else:
+        filtered = df[name_contains]
 
     if filtered.empty:
         raise HTTPException(status_code=404, detail=f"No sentiment data found for '{q}'")
