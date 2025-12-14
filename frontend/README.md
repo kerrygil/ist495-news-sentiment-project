@@ -70,14 +70,6 @@ The 3D stock performance visualization uses:
 
 No Tailwind configuration is required beyond what ships with Next.js.
 
-## Building for Production
-From the `frontend` directory:
-```bash
-npm run build
-npm start
-```
-This generates an optimized `.next` directory and starts the production server.
-
---- 
+---
 
 If you encounter module or dependency issues, ensure you run commands from the `frontend` directory and that the root project does not contain any leftover `node_modules` folder. 
