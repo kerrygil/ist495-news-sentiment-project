@@ -16,11 +16,14 @@ bearish,negative,1.3
 beat expectations,positive,1.4
 big cuts,positive,1
 brand loyalty,positive,1
+breakout,positive,1.3
+breakout quarter,positive,1.4
 breakthrough,positive,1
 bull case,positive,1
 bull case theory,positive,1
 bullish,positive,1.3
 bullish outlook,positive,1
+buy and hold,positive,1.3
 buy case,positive,1
 buy rating,positive,1
 buyback,positive,1.4
@@ -42,6 +45,10 @@ consumer confidence,positive,1
 contract win,positive,1.3
 contraction,negative,1
 correction,negative,1
+could crash,negative,1.5
+could double,positive,1.5
+could triple,positive,1.5
+credit downgrade,negative,1.3
 cpi,negative,1
 crash,negative,1.5
 currency debasement,positive,1
@@ -49,13 +56,17 @@ cut forecast,negative,1.4
 cut guidance,negative,1.3
 cut rates,positive,1
 cybersecurity,positive,1
+dangerous,negative,1.3
 data breach,negative,1.5
 deal secured,positive,1
 debt,negative,1.3
 debt burden,negative,1
+debt ceiling,negative,1
+debt default,negative,1.5
 debt reduction,positive,1
 decline,negative,1.3
 declining sales,negative,1
+deep value,positive,1.2
 default,negative,1
 delay,negative,1
 digital transformation,positive,1
@@ -68,14 +79,18 @@ dividend increase,positive,1.2
 dividend suspension,negative,1
 dollar weakness,positive,1
 dovish,positive,1
+down big,negative,1.3
 downgrade,negative,1.2
-downgrade,negative,1.2
+downgraded,negative,1.2
 downturn,negative,1
+dragged lower,negative,1.4
+drug efficacy,positive,1
 drop in revenue,negative,1.4
 dropped,negative,1.3
 drug launch,positive,1
 earnings beat,positive,1
 earnings miss,negative,1.5
+earnings snapshot,positive,1
 earnings surprise,positive,1.5
 environmental concerns,negative,1
 exceeded forecast,positive,1.4
@@ -93,6 +108,7 @@ fraud,negative,1.5
 free cash flow,positive,1
 geopolitical risk,negative,1
 geopolitical tension,positive,1
+going higherm,positive,1.3
 gold demand,positive,1
 gold shortage,positive,1
 government stimulus,positive,1
@@ -104,12 +120,15 @@ halt trading,negative,1.5
 hawkish,negative,1
 high inflation,negative,1
 higher rates,negative,1
+high risk,negative,1
+historic high,positive,1.5
 hit hard,negative,1.4
 holiday demand,positive,1
 improved margin,positive,1.3
 increased demand,positive,1.4
 inflation,negative,1
 inflation hedge,positive,1
+initiated buy,positive,1.3
 innovation,positive,1
 insolvency,negative,1
 interest rate increase,negative,1
@@ -121,9 +140,12 @@ joint venture,positive,1
 labor strikes,negative,1
 lawsuit,negative,1.4
 layoffs,negative,1.3
+life-changing returns,positive,1.5
 liquidity,positive,1
 liquidity concerns,negative,1
 liquidity injection,positive,1
+long-term growth,positive,1.2
+long-term winner,positive,1.3
 loose monetary,positive,1
 loss,negative,1
 losses widened,negative,1.4
@@ -142,6 +164,7 @@ moat,positive,1
 momentum,positive,1
 monetary stimulus,positive,1
 monster stock, positive,1.5
+multi-bagger,positive,1.5
 negative outlook,negative,1.3
 new product,positive,1.2
 new product launch,positive,1.2
@@ -151,6 +174,8 @@ order backlog,positive,1
 ore grade,positive,1
 outlook reduced,negative,1
 outperform,positive,1
+overbought,negative,1.2
+overvalued,negative,1.2
 panic,negative,1
 partnership,positive,1
 partnership deal,positive,1.2
@@ -159,12 +184,19 @@ pboc,positive,1
 permit delays,negative,1
 pessimism,negative,1
 platform outage,negative,1
+plummet,negative,1.5
+plummeting,negative,1.5
 plunge,negative,1
+plunging,negative,1.4
+point higher,positive,1.2
 policy uncertainty,negative,1
 positive outlook,positive,1.3
 positive sentiment,positive,1.2
 precious metals,positive,1
 pricing pressure,negative,1
+price target raised,positive,1.3
+price target cut,negative,1.3
+privacy concerns,negative,1
 production cuts,negative,1
 profit,positive,1.3
 profit growth,positive,1
@@ -177,7 +209,7 @@ quantitative easing,positive,1
 quantitative tightening,negative,1
 raise forecast,positive,1.4
 raised outlook,positive,1.4
-rally,positive,1
+rally,positive,1.3
 rate cuts,positive,1
 rate hikes,negative,1
 rate reduction,positive,1
@@ -205,6 +237,7 @@ rising prices,negative,1
 risk,negative,1
 risk-off,negative,1
 robust,positive,1
+run higher,positive,1.3
 safe haven,positive,1
 sanctions,negative,1
 scandal,negative,1.5
@@ -212,11 +245,17 @@ SEC investigation,negative,1.4
 sell rating,negative,1
 sell-off,negative,1
 semiconductor shortage,negative,1
+set you up for life,positive,1.5
 share buyback,positive,1
 share dilution,negative,1
 shortage,negative,1
 shortfall,negative,1.3
+skyrocket,positive,1.5
+skyrocketing,positive,1.5
+slump,negative,1.3
 slowdown,negative,1
+soar,positive,1.3
+soaring,positive,1.4
 software upgrade,positive,1
 solid,positive,1
 solid results,positive,1.3
@@ -230,23 +269,34 @@ strength,positive,1
 strong buy,positive,1
 strong earnings,positive,1
 strong forecast,positive,1.4
+strong growth,positive,1.3
 strong guidance,positive,1.4
 strong thesis,positive,1
+strong upside,positive,1.3
 supply chain,negative,1
-surge,positive,1.2
+surge,positive,1.4
+surging,positive,1.4
 takeover,positive,1
+tanked,negative,1.5
+tanking,negative,1.5
+targets met,positive,1.3
 tapering,negative,1
 target raised,positive,1.3
 tariffs,negative,1
 tech layoffs,negative,1
 tightening,negative,1
+top pick,positive,1.3
+trade deficit,negative,1
 trade war,negative,1
 trading suspension,negative,1.5
 treatment efficacy,positive,1
 uncertainty,negative,1
 underperform,negative,1.3
+undervalued,positive,1.2
 unstable,negative,1
 upgrade,positive,1.2
+upgrade,positive,1.2
+upside,positive,1.3
 vaccine rollout,positive,1
 volatility,negative,1.2
 vulnerable,negative,1

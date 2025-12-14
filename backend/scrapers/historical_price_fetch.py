@@ -128,13 +128,13 @@ def _find_price_near_timestamp(df: pd.DataFrame, target_utc: datetime, acceptanc
         return None
     pos = int(diffs.argmin())
     best_ts = df.index[pos]
-    best_diff = diffs[pos]
+    best_diff = diffs.iloc[pos] 
 
     if best_diff <= acceptance:
         # handle possible multiple rows for the same timestamp
         val = df.loc[best_ts, "Close"]
         if isinstance(val, pd.Series):
-            val = val.iloc[0]
+            val = val.iloc[0].item() if hasattr(val.iloc[0], "item") else val.iloc[0]
         elif isinstance(val, np.ndarray) or isinstance(val, list):
             val = val[-1]
         return float(val)
@@ -151,7 +151,7 @@ def _compute_relative_volume_from_daily(daily_df: pd.DataFrame, chosen_date: dat
     dates = [d.date() for d in daily_df.index]
     if chosen_date in dates:
         vols_on = daily_df.loc[[i for i in daily_df.index if i.date() == chosen_date], "Volume"]
-        recent_vol = float(vols_on.iloc[0]) if not vols_on.empty else None
+        recent_vol = float(vols_on.iloc[0].item()) if not vols_on.empty else None
     else:
         future = [d for d in dates if d >= chosen_date]
         past = [d for d in dates if d <= chosen_date]
@@ -167,7 +167,7 @@ def _compute_relative_volume_from_daily(daily_df: pd.DataFrame, chosen_date: dat
         vols_on = daily_df.loc[[i for i in daily_df.index if i.date() == pick], "Volume"]
         if not vols_on.empty:
             recent_val = vols_on.iloc[0]
-            recent_vol = float(recent_val) if np.isscalar(recent_val) else float(recent_val.item())
+            recent_vol = float(np.asarray(recent_val).item())
         else:
             recent_vol = None
 
@@ -205,30 +205,31 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
     pub_eastern = _ensure_tz_eastern(published_datetime)
     pub_utc = normalize_timestamp(published_datetime)
     pub_date = pub_eastern.date()
-    in_market_hours = (pub_eastern.weekday() < 5 and pub_eastern.time() >= datetime(pub_eastern.year, pub_eastern.month, pub_eastern.day, 9, 30).time() and pub_eastern.time() <= datetime(pub_eastern.year, pub_eastern.month, pub_eastern.day, 16, 0).time())
 
-    # 1) Fetch daily data (required)
+    # Fetch daily data for relative volume & open price
     daily_df = _fetch_daily_df(ticker)
     if daily_df is None:
         print(f"[{ticker}] no daily data available → aborting fetch_price_changes")
         return {}
 
-    # compute relative_volume using daily logic (choose vol_date sensibly)
     try:
-        if in_market_hours and any(d.date() == pub_date for d in daily_df.index):
+        dates = sorted({d.date() for d in daily_df.index})
+
+        if pub_date in dates:
+            # Use today's volume even after hours
             vol_date = pub_date
         else:
-            # prefer the next trading day >= pub_date (market will produce volume then), else last available
-            dates = sorted({d.date() for d in daily_df.index})
-            future = [d for d in dates if d >= pub_date]
-            vol_date = future[0] if future else (dates[-1] if dates else None)
+            # fallback: nearest previous trading day
+            past = [d for d in dates if d <= pub_date]
+            vol_date = past[-1] if past else None
 
         relative_volume = _compute_relative_volume_from_daily(daily_df, vol_date) if vol_date else None
+
     except Exception as e:
         print(f"[{ticker}] relative volume calc failed: {e}")
         relative_volume = None
 
-    # 2) Determine market-open price for pub_date (baseline)
+    # Determine market-open price for pub_date (baseline)
     open_price = None
     try:
         # prefer Open of same calendar date if available. If not present, pick closest trading day <= pub_date else next.
@@ -236,7 +237,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
         if pub_date in available_dates:
             rows = daily_df.loc[daily_df.index.date == pub_date, "Open"]
             if not rows.empty:
-                open_price = float(rows.iloc[0])
+                open_price = float(rows.iloc[0].item())
         else:
             prev = [d for d in available_dates if d <= pub_date]
             nxt = [d for d in available_dates if d >= pub_date]
@@ -244,7 +245,8 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
             if chosen:
                 rows = daily_df.loc[daily_df.index.date == chosen, "Open"]
                 if not rows.empty:
-                    open_price = float(rows.iloc[0])
+                    open_price = float(rows.iloc[0].item())
+
     except Exception as e:
         print(f"[{ticker}] open_price failed: {e}")
         open_price = None
@@ -254,7 +256,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
         print(f"[{ticker}] no open price for {pub_date}, aborting")
         return {}
 
-    # 3) Try to get price_at_publish by probing intraday intervals
+    # Try to get price_at_publish by probing intraday intervals
     price_at_publish = None
     intraday_df_for_short_intervals = None
     for intrv in INTRADAY_INTERVALS:
@@ -278,7 +280,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
             if any(d.date() == pub_date for d in daily_df.index):
                 close_rows = daily_df.loc[daily_df.index.date == pub_date, "Close"]
                 if not close_rows.empty:
-                    price_at_publish = float(close_rows.iloc[0])
+                    price_at_publish = float(close_rows.iloc[0].item())
             else:
                 # pick nearest trading date
                 dates = sorted({d.date() for d in daily_df.index})
@@ -289,7 +291,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
                 if chosen:
                     close_rows = daily_df.loc[daily_df.index.date == chosen, "Close"]
                     if not close_rows.empty:
-                        price_at_publish = float(close_rows.iloc[0])
+                        price_at_publish = float(close_rows.iloc[0].item())
         except Exception:
             price_at_publish = None
 
@@ -303,7 +305,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
             "note": "baseline=open_of_day"
         }
 
-    # 4) Short term intervals (1h, 4h) from intraday if present
+    # Short term intervals (1h, 4h) from intraday if present
     if intraday_df_for_short_intervals is not None:
         df = intraday_df_for_short_intervals
         # best effort: compute 1h & 4h using the intraday index (find forward index points)
@@ -321,7 +323,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
             except Exception:
                 pass
 
-    # 5) Longer term intervals (1d, 1w, EOD) from daily_df
+    # Longer term intervals (1d, 1w, EOD) from daily_df
     try:
         daily_dates = sorted({d.date() for d in daily_df.index})
         # EOD: use same date close if available else nearest
@@ -336,7 +338,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
         if eod_date:
             rows = daily_df.loc[daily_df.index.date == eod_date, "Close"]
             if not rows.empty:
-                eod_price = float(rows.iloc[0])
+                eod_price = float(rows.iloc[0].item())
                 outs["EOD"] = {"price": eod_price, "pct_change": _safe_pct(eod_price, price_at_publish or open_price), "relative_volume": relative_volume}
         # 1d and 1w: next trading date >= pub_date + days
         def find_trading_on_or_after(target_date):
@@ -349,7 +351,7 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
             if trade_date:
                 rows = daily_df.loc[daily_df.index.date == trade_date, "Close"]
                 if not rows.empty:
-                    price = float(rows.iloc[0])
+                    price = float(rows.iloc[0].item())
                     outs[label] = {"price": price, "pct_change": _safe_pct(price, price_at_publish or open_price), "relative_volume": relative_volume}
     except Exception as e:
         print(f"{ticker} daily intervals failed: {e}")
@@ -364,29 +366,45 @@ def fetch_price_changes(ticker: str, published_datetime: datetime) -> Dict[str, 
             v["relative_volume"] = float(v["relative_volume"])
     return outs
 
+def is_missing_rvol(x):
+    if x is None:
+        return True
+    try:
+        return pd.isna(x)
+    except:
+        pass
+
+    return False
+
+
 def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: Dict[str, Dict]):
-    """
-    Insert price rows into HistoricalPrice table. Only inserts intervals that do not exist.
-    If an interval exists and relative_volume is None while new data has it, update that field.
-    """
     inserted, updated, skipped = 0, 0, 0
+    
     for interval, values in price_data.items():
         if "price" not in values and "pct_change" not in values:
             continue
+        
         existing = db.query(HistoricalPrice).filter_by(
             ticker_id=ticker_id,
             article_id=article_id,
             interval=interval
         ).first()
+
+        new_rv = values.get("relative_volume")
+
         if existing:
-            # update relative_volume if missing
-            if (existing.relative_volume is None) and ("relative_volume" in values):
-                existing.relative_volume = values.get("relative_volume")
+            old_rv = existing.relative_volume
+            
+            # update ANY time old RVOL is missing and new exists
+            if new_rv is not None and is_missing_rvol(old_rv):
+                existing.relative_volume = new_rv
                 db.add(existing)
                 updated += 1
             else:
                 skipped += 1
             continue
+
+        # New interval → insert fresh row
         try:
             hp = HistoricalPrice(
                 ticker_id=ticker_id,
@@ -394,7 +412,7 @@ def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: 
                 interval=interval,
                 price=values.get("price"),
                 pct_change=values.get("pct_change"),
-                relative_volume=values.get("relative_volume"),
+                relative_volume=new_rv,
             )
             db.add(hp)
             inserted += 1
@@ -405,9 +423,9 @@ def insert_price_data(db: Session, ticker_id: int, article_id: int, price_data: 
             db.rollback()
             print(f"Insertion error for {ticker_id}/{article_id}/{interval}: {e}")
             skipped += 1
+
     db.commit()
     return inserted, updated, skipped
-
 
 def process_articles(batch_limit: Optional[int] = None):
     db = SessionLocal()

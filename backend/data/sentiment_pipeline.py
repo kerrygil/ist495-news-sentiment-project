@@ -100,6 +100,28 @@ def fetch_article_text(url):
 
         # Clean up whitespace and non-text
         text = re.sub(r"\s+", " ", text).strip()
+
+        # Try OpenGraph description
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content"):
+            text = og_desc["content"]
+            if len(text.split()) > 5:
+                return text
+
+        # Try Twitter summary
+        twitter_desc = soup.find("meta", attrs={"name": "twitter:description"})
+        if twitter_desc and twitter_desc.get("content"):
+            text = twitter_desc["content"]
+            if len(text.split()) > 5:
+                return text
+
+        # Try meta description
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        if meta_desc and meta_desc.get("content"):
+            text = meta_desc["content"]
+            if len(text.split()) > 5:
+                return text
+
         return text
     except Exception:
         return ""
@@ -167,24 +189,52 @@ def get_text_sentiment(text: str, csv_dict, lm_dict) -> float:
 
 def get_combined_sentiment(row, csv_dict, lm_dict):
     url = row.get("url", "")
-    title = preprocess_financial_text(row.get("title", ""))
+    title_raw = row.get("title", "")
+    title = preprocess_financial_text(title_raw)
 
-    # Try to fetch body text
+    # --- Fetch body text ---
     article_text = fetch_article_text(url)
-    article_text = preprocess_financial_text(article_text)
+    article_text_clean = preprocess_financial_text(article_text)
 
-    # Headline sentiment
+    # --- Compute headline sentiment ---
     headline_score = get_text_sentiment(title, csv_dict, lm_dict)
-    headline_vader = vader_sentiment(title)
-
+    vader_score = vader_sentiment(title)
     keyword_score = keyword_sentiment_score(title, csv_dict, lm_dict)
 
-    # Body sentiment (fallback to title if empty)
-    if article_text:
-        body_score = get_text_sentiment(article_text, csv_dict, lm_dict)
-        combined = np.mean([headline_score, headline_vader, body_score, keyword_score])
+    # --- Compute body sentiment if available ---
+    body_score = None
+    body_len = len(article_text_clean.split()) if article_text_clean else 0
+    has_body = body_len > 5
+
+    if has_body:
+        body_score = get_text_sentiment(article_text_clean, csv_dict, lm_dict)
+
+    if has_body and body_len > 40:
+        # Full article available
+        combined = (
+            0.40 * body_score +
+            0.30 * headline_score +
+            0.20 * vader_score +
+            0.10 * keyword_score
+        )
+    elif has_body and body_len > 10:
+        # Partial but useful body text
+        combined = (
+            0.25 * body_score +
+            0.40 * headline_score +
+            0.25 * vader_score +
+            0.10 * keyword_score
+        )
     else:
-        combined = np.mean([headline_score, headline_vader, keyword_score])
+        # No body text → rely on headline only
+        combined = (
+            0.50 * headline_score +
+            0.35 * vader_score +
+            0.15 * keyword_score
+        )
+
+    if not has_body:
+        combined *= 0.75     # Confidence penalty
 
     return combined
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from unittest import result
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -357,17 +358,20 @@ def get_recent_articles(
     ticker_df = pd.DataFrame(tickers, columns=["ticker_id", "symbol", "company_name"])
     df = df.merge(ticker_df, on="ticker_id", how="left")
 
-    # Drop duplicate articles if needed
-    if "id" in df.columns:
-        df = df.sort_values("published_at", ascending=False)
-        df = df.drop_duplicates(subset=["id"], keep="first")
+    # --- ALWAYS collapse multiple rows per article down to 1 row ---
+    if "id" in df.columns and "published_at" in df.columns:
+
+        # pick the row closest to the actual published time
+        idx = df.groupby("id")["published_at"].idxmax()   # or idxmin if needed
+
+        df = df.loc[idx].copy()
 
     # Filter by ticker
     if ticker:
         t_up = ticker.strip().upper()
         df = df[df["symbol"].astype(str).str.upper() == t_up]
 
-    # Sorting logic
+    # Sorting logic (AFTER dedupe)
     ascending = order.lower() == "asc"
     valid_sort_cols = ["published_at", "combined_score", "pct_change", "relative_volume"]
 
@@ -378,7 +382,6 @@ def get_recent_articles(
         df[sort_by] = pd.to_numeric(df[sort_by], errors="coerce").fillna(0)
         df = df.sort_values(by=sort_by, ascending=ascending, na_position="last")
     else:
-        # Date sorting
         df = df.sort_values(by="published_at", ascending=ascending, na_position="last")
 
     # Pagination
@@ -391,13 +394,10 @@ def get_recent_articles(
     def recordify(row):
         r = row.to_dict()
 
-        # Fix datetime fields
+        # Send datetime as local EST string
         pub = r.get("published_at")
-        if pub:
-            try:
-                r["published_at"] = pd.to_datetime(pub).isoformat()
-            except:
-                r["published_at"] = None
+        if isinstance(pub, (pd.Timestamp, datetime)):
+            r["published_at"] = pub.strftime("%Y-%m-%d %H:%M:%S")  # local ET
         else:
             r["published_at"] = None
 

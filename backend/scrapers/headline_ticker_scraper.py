@@ -36,11 +36,82 @@ def normalize_url(url: str) -> str:
 
     return url
 
+import json
+from dateutil import parser as dateparser
+
+def extract_true_timestamp(article_html: str, url: str) -> datetime | None:
+    soup = BeautifulSoup(article_html, "html.parser")
+    
+    info_div = None
+
+    if "finviz.com" in url:
+        info_div = soup.select_one("div.news-publish-info div.grow.self-center")
+    if info_div:
+        text = info_div.get_text(" ", strip=True)
+
+        m = re.search(r"\|\s*(.+)$", text)
+        if m:
+            date_str = m.group(1)
+        else:
+            date_str = text
+
+        try:
+            return dateparser.parse(date_str)
+        except Exception:
+            pass
+
+    meta_time = soup.find("meta", {"property": "article:published_time"})
+    if meta_time and meta_time.get("content"):
+        return dateparser.parse(meta_time["content"])
+
+    meta_time = soup.find("meta", {"name": "datePublished"})
+    if meta_time and meta_time.get("content"):
+        return dateparser.parse(meta_time["content"])
+
+    time_tag = soup.find("time", {"datetime": True})
+    if time_tag:
+        return dateparser.parse(time_tag["datetime"])
+
+    ld_json_blocks = soup.find_all("script", {"type": "application/ld+json"})
+    for block in ld_json_blocks:
+        try:
+            data = json.loads(block.text)
+            if isinstance(data, dict):
+                if "datePublished" in data:
+                    return dateparser.parse(data["datePublished"])
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict) and "datePublished" in item:
+                        return dateparser.parse(item["datePublished"])
+        except Exception:
+            continue
+
+    # Yahoo Finance
+    yf = soup.select_one("time[data-test='article-time']")
+    if yf and yf.get("datetime"):
+        return dateparser.parse(yf["datetime"])
+
+    # MarketWatch
+    mw = soup.find("span", {"class": "timestamp__date"})
+    if mw:
+        try:
+            return dateparser.parse(mw.get_text(strip=True))
+        except:
+            pass
+
+    # BusinessWire / PR Newswire
+    bw = soup.find("span", {"class": "bw-release-timestamp"})
+    if bw:
+        return dateparser.parse(bw.text.strip())
+
+    # If everything fails:
+    print(f"WARNING: No timestamp detected for article: {url}")
+    return None
+
 def main():
     # Load environment variables
     load_dotenv()
 
-    print("Using DB:", SQLALCHEMY_DATABASE_URL)
     # Create a database session
     db = SessionLocal()
 
@@ -51,17 +122,6 @@ def main():
     #if now.weekday() >= 5 or now.hour < 9 or now.hour >= 16:
     #    print(f"Skipped at {now} (outside market hours)")
     #    return
-
-    # Load valid tickers
-    try:
-        finviz_df = pd.read_csv("backend/data/finviz.csv")
-        if "Ticker" not in finviz_df.columns:
-            raise KeyError("Missing 'Ticker' column in finviz.csv")
-        valid_tickers = set(finviz_df["Ticker"].astype(str).str.strip().str.upper())
-        print(f"✅ Loaded {len(valid_tickers)} valid tickers.")
-    except Exception as e:
-        print(f"ERROR loading CSV: {e}")
-        valid_tickers = set()
 
     # Create scraper
     scraper = cloudscraper.create_scraper()
@@ -85,13 +145,11 @@ def main():
             skipped += 1
             continue
 
-        # Try to find a ticker link within the same row *after* the headline
-        ticker_tag = row.find("a", href=re.compile(r"/quote\.ashx\?t="))
-        ticker_symbol = None
-        if ticker_tag:
-            ticker_symbol = ticker_tag.get_text(strip=True).upper()
+        # Extract ALL ticker symbols in the row
+        ticker_tags = row.select('a[href*="/quote.ashx?t="]')
+        tickers = {t.get_text(strip=True).upper() for t in ticker_tags}
 
-        if not ticker_symbol or ticker_symbol not in valid_tickers:
+        if not tickers:
             skipped += 1
             continue
 
@@ -119,54 +177,59 @@ def main():
             skipped += 1
             continue
 
-        # Ensure ticker exists in DB
-        ticker = db.query(Ticker).filter_by(symbol=ticker_symbol).first()
-        if not ticker:
-            finviz_match = finviz_df[finviz_df["Ticker"].str.upper() == ticker_symbol]
-            if not finviz_match.empty:
-                company_name = finviz_match.iloc[0]["Company"]
-                sector = finviz_match.iloc[0]["Sector"]
-                industry = finviz_match.iloc[0]["Industry"]
-            else:
-                company_name, sector, industry = None, None, None
+        # Insert one Article per ticker symbol found
+        for ticker_symbol in tickers:
 
-            ticker = Ticker(symbol=ticker_symbol, company_name=company_name, sector=sector, industry=industry)
-            db.add(ticker)
-            db.commit()
-            db.refresh(ticker)
+            # Check DB for ticker
+            ticker = db.query(Ticker).filter_by(symbol=ticker_symbol).first()
 
-        # Fix article URL (remove double finviz.com)
-        href = headline_tag["href"]
-        if href.startswith("http"):
-            article_url = href
-        else:
-            article_url = f"https://finviz.com{href}"
+            # If missing, create barebones ticker entry
+            if not ticker:
+                ticker = Ticker(symbol=ticker_symbol)
+                db.add(ticker)
+                db.commit()
+                db.refresh(ticker)
 
-        article_url = normalize_url(article_url)
+            # Normalize URL
+            article_url = headline_tag["href"]
+            if not article_url.startswith("http"):
+                article_url = f"https://finviz.com{article_url}"
+            article_url = normalize_url(article_url)
 
-        existing_article = db.query(Article).filter_by(url=article_url).first()
-        if existing_article:
-            skipped += 1
-            continue
+            # Prevent duplicates
+            if db.query(Article).filter_by(url=article_url, ticker_id=ticker.id).first():
+                skipped += 1
+                continue
 
-        article = Article(
-            ticker_id=ticker.id,
-            title=headline,
-            url=article_url,
-            published_at=timestamp,
-        )
+            # Insert article
+            article = Article(
+                ticker_id=ticker.id,
+                title=headline,
+                url=article_url,
+                published_at=timestamp,
+            )
 
-        db.add(article)
-        try:
-            db.commit()
-            inserted += 1
-            print(f"[{timestamp}] [{ticker_symbol}] {headline}")
-        except IntegrityError:
-            db.rollback()
-            skipped += 1
-        except Exception as e:
-            db.rollback()
-            skipped += 1
+            # Try to fetch the true timestamp from article page
+            true_timestamp = None
+            try:
+                article_html = scraper.get(article_url, timeout=10).text
+                true_timestamp = extract_true_timestamp(article_html, article_url)
+            except Exception as e:
+                print(f"ERROR fetching article page {article_url}: {e}")
+
+            # If real timestamp found, override BEFORE commit
+            if true_timestamp:
+                article.published_at = true_timestamp
+
+            db.add(article)
+            try:
+                db.commit()
+                inserted += 1
+                print(f"[{article.published_at}] [{ticker_symbol}] {headline}")
+            except IntegrityError:
+                db.rollback()
+                skipped += 1
+
 
     # Close DB session
     db.close()

@@ -4,36 +4,53 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
-    # Dates are already filtered — just make features
-    df['published_at'] = (
-        pd.to_datetime(df['published_at'], errors='coerce', utc=True)
-        .dt.tz_convert('America/New_York')
-        .dt.tz_localize(None)
-    )
-    df['created_at'] = (
-        pd.to_datetime(df['created_at'], errors='coerce', utc=True)
-        .dt.tz_convert('America/New_York')
-        .dt.tz_localize(None)
-    )
+    # At this point, we assume published_at and created_at are naive
+    # local timestamps in America/New_York
 
-    df['minutes_to_price'] = (df['created_at'] - df['published_at']).dt.total_seconds() / 60
-    df['day_of_week'] = df['published_at'].dt.dayofweek
-    df['hour_of_day'] = df['published_at'].dt.hour
+    df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
+    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
 
-    pub_times = df['published_at'].dt.time
-    df['is_market_hours'] = (
-        (df['day_of_week'] < 5)
-        & (pub_times >= pd.to_datetime('09:30').time())
-        & (pub_times <= pd.to_datetime('16:00').time())
+    # Minutes from article publish to price snapshot
+    df["minutes_to_price"] = (df["created_at"] - df["published_at"]).dt.total_seconds() / 60
+
+    # Calendar features based on local time
+    df["day_of_week"] = df["published_at"].dt.dayofweek
+    df["hour_of_day"] = df["published_at"].dt.hour
+
+    pub_times = df["published_at"].dt.time
+
+    market_open = pd.to_datetime("09:30").time()
+    market_close = pd.to_datetime("16:00").time()
+    aftermarket_close = pd.to_datetime("20:00").time()
+
+    # Regular market hours (Mon–Fri, 9:30–16:00 ET)
+    df["is_market_hours"] = (
+        (df["day_of_week"] < 5)
+        & (pub_times >= market_open)
+        & (pub_times <= market_close)
     ).astype(int).fillna(0)
 
-    df['is_aftermarket'] = (
-        (df['day_of_week'] < 5)
-        & (pub_times > pd.to_datetime('16:00').time())
-        & (pub_times <= pd.to_datetime('20:00').time())
+    # Aftermarket (Mon–Fri, 16:00–20:00 ET)
+    df["is_aftermarket"] = (
+        (df["day_of_week"] < 5)
+        & (pub_times > market_close)
+        & (pub_times <= aftermarket_close)
     ).astype(int).fillna(0)
 
     return df
+
+import re
+
+def normalize_timestamp_string(s: str) -> str:
+    if not isinstance(s, str):
+        return s
+
+    s = s.strip()
+
+    if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\+00:00$", s):
+        s = s.replace("+00:00", ".000000+00:00")
+
+    return s
 
 
 def feature_engineering(articles_path, prices_path, output_path):
@@ -44,59 +61,48 @@ def feature_engineering(articles_path, prices_path, output_path):
     print(f"Raw Articles rows: {len(articles_df)}")
     print(f"Raw Prices rows:   {len(prices_df)}")
 
-    # Parse datetimes with UTC to avoid mixed tz warnings
-    articles_df["published_at"] = pd.to_datetime(articles_df["published_at"], errors="coerce", utc=True)
-    prices_df["created_at"] = pd.to_datetime(prices_df["created_at"], errors="coerce", utc=True)
+    articles_df["published_at"] = (
+        articles_df["published_at"]
+            .astype(str)
+            .map(normalize_timestamp_string)
+    )
 
-    # Define cutoff in UTC to match parsed datetimes
-    cutoff_date = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=2)
+    articles_df["published_at"] = pd.to_datetime(
+        articles_df["published_at"], errors="coerce", utc=True
+    ).dt.tz_convert("America/New_York").dt.tz_localize(None)
 
-    # Filter to only recent data (compare UTC-to-UTC)
+    prices_df["created_at"] = pd.to_datetime(
+        prices_df["created_at"], errors="coerce", utc=True
+    ).dt.tz_convert("America/New_York").dt.tz_localize(None)
+
+    cutoff_date = datetime.now() - timedelta(days=2)
     articles_df = articles_df[articles_df["published_at"] >= cutoff_date]
     prices_df = prices_df[prices_df["created_at"] >= cutoff_date]
 
-    print(f"\nFiltered to only include data from {cutoff_date.tz_convert('America/New_York'):%Y-%m-%d %H:%M %Z} onwards")
+    print(
+        f"\nFiltered to only include data from {cutoff_date:%Y-%m-%d %H:%M} "
+        f"onwards (America/New_York local time)"
+    )
     print(f"Remaining Articles: {len(articles_df)}, Prices: {len(prices_df)}\n")
 
-    # Optional: remove tz before continuing, since downstream code assumes naive timestamps
-    articles_df["published_at"] = articles_df["published_at"].dt.tz_localize(None)
-    prices_df["created_at"] = prices_df["created_at"].dt.tz_localize(None)
-
-    print(f"\nFiltered to only include data from {cutoff_date:%Y-%m-%d} onwards")
-    print(f"Remaining Articles: {len(articles_df)}, Prices: {len(prices_df)}\n")
-
-    # Ensure expected columns exist
     for col in ["id", "ticker_id", "published_at"]:
         if col not in articles_df.columns:
             raise RuntimeError(f"Articles CSV missing column: {col}")
 
     for col in ["article_id", "ticker_id", "created_at", "price", "pct_change", "relative_volume"]:
         if col not in prices_df.columns:
-            # not fatal — warn so you can inspect
             print(f"Warning: Prices CSV missing column: {col} (this may be expected for some runs)")
 
-    # Convert ids and numeric fields to proper types (coerce errors)
     articles_df["id"] = pd.to_numeric(articles_df["id"], errors="coerce").astype("Int64")
     articles_df["ticker_id"] = pd.to_numeric(articles_df["ticker_id"], errors="coerce").astype("Int64")
 
     prices_df["article_id"] = pd.to_numeric(prices_df["article_id"], errors="coerce").astype("Int64")
     prices_df["ticker_id"] = pd.to_numeric(prices_df["ticker_id"], errors="coerce").astype("Int64")
 
-    # parse datetimes safely
-    if "published_at" in articles_df.columns:
-        articles_df["published_at"] = pd.to_datetime(articles_df["published_at"], errors="coerce")
-    if "created_at" in prices_df.columns:
-        prices_df["created_at"] = pd.to_datetime(prices_df["created_at"], errors="coerce")
-
     # numeric columns in prices
     for numcol in ["price", "pct_change", "relative_volume"]:
         if numcol in prices_df.columns:
             prices_df[numcol] = pd.to_numeric(prices_df[numcol], errors="coerce")
-
-    print("Post-parsing dtypes (articles):")
-    print(articles_df.dtypes)
-    print("Post-parsing dtypes (prices):")
-    print(prices_df.dtypes)
 
     # Merge with indicator to see unmatched rows
     merged_df = pd.merge(
