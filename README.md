@@ -58,9 +58,25 @@ frontend/README.md   <- frontend-specific instructions
 
 ## Installation & Setup
 
+### 0. Python Version
+
+This project was developed and tested using **Python 3.13**, you must have it installed **both**:
+
+1. On your system (global install) - so that the virtual environment can be created
+2. Inside your virtual environment (venv) - where the backend actually rns
+
+If you do not already have Python 3.13 installed, download it from: https://www.python.org/downloads/
+
+After installation, verify:
+```bash
+python3 --version 
+# or with Windows:
+python --version
+```
+
 ### 1. Clone the Repository
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/kerrygil/ist495-news-sentiment-project.git
 cd IST495_News_Sentiment_Project
 ```
 
@@ -79,9 +95,67 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### PostgreSQL Version
+
+This project was developed using **PostgreSQL 17.x**.
+
+You may install **any 17-series version**, including the most recent **17.7**, which is fully compatible and recommended due to security patches and bug fixes.
+
+If you do not already have PostgreSQL 17, download it from: https://www.postgresql.org/download/
+
+(Do *not* install PostgreSQL 18.x unless you want to run your own upgraded environment; the project does not require any PostgreSQL 18 features.)
+
+### Creating the PostgreSQL database
+If the database does not exist, create it manually:
+
+```bash
+psql -U postgres
+CREATE DATABASE sentiment_dev;
+\q
+```
+
+Then apply your schema:
+
+```bash
+python backend/data/create_schema.py
+```
+
 ### Initialize the database
-If using SQLite, nothing required.  
-If using PostgreSQL, create your DB and update `.env`.
+In PostgreSQL, create your DB and update `.env`.
+
+### 🔐 Environment Variables (`.env`)
+
+The backend requires a `.env` file in the **project root** to configure the database connection.  
+This file is intentionally excluded from version control via `.gitignore`, so you must create it manually.
+
+Create a new file named **`.env`** in the project root and include the following:
+
+```
+# Path to your Python interpreter (optional, used for development tools)
+PYTHON_PATH=<path-to-python>
+
+# PostgreSQL database configuration
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<your-db-password>
+POSTGRES_DB=sentiment_dev
+```
+
+### Notes:
+- `POSTGRES_PASSWORD` must be replaced with **your personal PostgreSQL password**.  
+- Ensure your database is running before starting the backend.
+- `POSTGRES_DB` can be anything but must match your database name.
+
+### Example (Windows)
+```
+PYTHON_PATH=C:\Users\<yourname>\AppData\Local\Programs\Python\Python313\python.exe
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=yourPasswordHere
+POSTGRES_DB=sentiment_dev
+```
 
 ### Run backend
 ```bash
