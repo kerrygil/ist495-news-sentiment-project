@@ -58,7 +58,7 @@ frontend/README.md   <- frontend-specific instructions
 
 ## Installation & Setup
 
-### 0. Python Version
+### 1. Python Version
 
 This project was developed and tested using **Python 3.13**, you must have it installed **both**:
 
@@ -74,11 +74,21 @@ python3 --version
 python --version
 ```
 
-### 1. Clone the Repository
+### 2. Clone the Repository
 ```bash
 git clone https://github.com/kerrygil/ist495-news-sentiment-project.git
 cd IST495_News_Sentiment_Project
 ```
+
+### 3. PostgreSQL Version
+
+This project was developed using **PostgreSQL 17.x**.
+
+You may install **any 17-series version**, including the most recent **17.7**, which is fully compatible and recommended due to security patches and bug fixes.
+
+If you do not already have PostgreSQL 17, download it from: https://www.postgresql.org/download/
+
+(Do *not* install PostgreSQL 18.x unless you want to run your own upgraded environment; the project does not require any PostgreSQL 18 features.)
 
 ---
 
@@ -94,16 +104,6 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
-
-### PostgreSQL Version
-
-This project was developed using **PostgreSQL 17.x**.
-
-You may install **any 17-series version**, including the most recent **17.7**, which is fully compatible and recommended due to security patches and bug fixes.
-
-If you do not already have PostgreSQL 17, download it from: https://www.postgresql.org/download/
-
-(Do *not* install PostgreSQL 18.x unless you want to run your own upgraded environment; the project does not require any PostgreSQL 18 features.)
 
 ### Creating the PostgreSQL database
 If the database does not exist, create it manually:
