@@ -1,12 +1,12 @@
 import importlib
 
 SCRIPTS = [
-    "backend.scrapers.headline_ticker_scraper",
-    "backend.scrapers.historical_price_fetch",
-    "backend.data.cleaning_pipeline",
-    "backend.data.feature_engineering",
-    "backend.data.sentiment_pipeline",
-    "backend.data.aggregate_sentiment",
+    "backend.pipelines.headline_ticker_scraper",
+    "backend.pipelines.historical_price_fetch",
+    "backend.pipelines.cleaning_pipeline",
+    "backend.pipelines.feature_engineering",
+    "backend.pipelines.sentiment_pipeline",
+    "backend.pipelines.aggregate_sentiment",
 ]
 
 def run_full_pipeline():

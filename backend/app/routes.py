@@ -1,162 +1,17 @@
 from datetime import datetime
 from typing import Optional
-from unittest import result
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func
 from backend.models import data_models
-from backend.models.data_models import HistoricalPrice, Ticker, Article
+from backend.models.data_models import HistoricalPrice, Ticker
 from backend.data.database import get_db
 from backend.app.utils import sanitize_floats, try_float
 import pandas as pd
 import os
-import importlib
 from decimal import Decimal
-import numpy as np
-import subprocess
-import sys
 
 router = APIRouter()
-
-@router.get("/test")
-def read_root():
-    return {"message": "Backend is running!"}
-
-@router.get("/test-db-connection")
-def test_db_connection(db: Session = Depends(get_db)):
-    try:
-        db.execute(text('SELECT 1'))
-        return {"status": "Database connection successful"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@router.get("/tickers/")
-def read_tickers(db: Session = Depends(get_db)):
-    return db.query(data_models.Ticker).all()
-
-
-@router.get("/cleaned_articles")
-def get_cleaned_articles():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(base_dir, "..", "data", "cleaned_data", "articles_cleaned.csv")
-
-    csv_path = os.path.normpath(csv_path)
-
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail=f"File not found: {csv_path}")
-
-    df = pd.read_csv(csv_path)
-
-    data = df.head(10).to_dict(orient="records")
-    return {"cleaned_articles": data}
-
-@router.get("/aggregated_features")
-def get_aggregated_features(db: Session = Depends(get_db)):
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "features_aggregated.csv"))
-
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail="Aggregated file not found. Run aggregate_sentiments.py first.")
-
-    df = pd.read_csv(csv_path)
-
-    # get ticker IDs and symbols
-    tickers = db.query(Ticker.id, Ticker.symbol, Ticker.company_name).all()
-    ticker_df = pd.DataFrame(tickers, columns=["ticker_id", "ticker", "company_name"])
-
-    # get accurate article counts from the database
-    article_counts = (
-        db.query(Article.ticker_id, func.count(Article.id).label("article_count"))
-        .group_by(Article.ticker_id)
-        .all()
-    )
-    article_count_df = pd.DataFrame(article_counts, columns=["ticker_id", "article_count"])
-
-    # merge everything
-    df = df.merge(ticker_df, on="ticker_id", how="left")
-    df = df.merge(article_count_df, on="ticker_id", how="left")
-
-    # rename for consistency with frontend expectations
-    df = df.rename(columns={
-        "combined_score": "avg_combined_score"
-    })
-
-    # fill NaNs (in case some tickers have 0 articles)
-    df["article_count"] = df["article_count"].fillna(0).astype(int)
-
-    return {
-        "records": df.to_dict(orient="records"),
-        "summary": {
-            "total_articles": int(df["article_count"].sum()),
-            "accurate": int((df["sentiment_price_correlation"] == "accurate").sum()),
-            "inconclusive": int((df["sentiment_price_correlation"] == "inconclusive").sum()),
-            "neutral": int((df["sentiment_price_correlation"] == "neutral").sum()),
-        }
-    }
-
-@router.get("/sentiment_articles")
-def get_sentiment_articles():
-    """Return article-level sentiment analysis results before aggregation."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "articles_sentiment.csv"))
-
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail="Sentiment file not found. Run sentiment_pipeline.py first.")
-
-    df = pd.read_csv(csv_path)
-    summary = (
-        df["sentiment_price_agreement"]
-        .value_counts(normalize=True)
-        .mul(100)
-        .round(2)
-        .to_dict()
-    )
-
-    return {
-        "records": df.head(20).to_dict(orient="records"),
-        "agreement_summary": summary,
-    }
-
-@router.get("/tickers_summary")
-def get_tickers_summary():
-    """Return sentiment accuracy grouped by ticker."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.normpath(os.path.join(base_dir, "..", "data", "cleaned_data", "features_aggregated.csv"))
-
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail="Aggregated file not found.")
-
-    df = pd.read_csv(csv_path)
-
-    summary = (
-        df.groupby("ticker_id")["sentiment_price_correlation"]
-        .value_counts()
-        .unstack(fill_value=0)
-        .reset_index()
-    )
-
-    return {"ticker_summary": summary.to_dict(orient="records")}
-
-@router.post("/refresh_data")
-def refresh_data():
-    scripts = [
-        "backend.scrapers.headline_ticker_scraper",
-        "backend.scrapers.historical_price_fetch",
-        "backend.data.cleaning_pipeline",
-        "backend.data.feature_engineering",
-        "backend.data.sentiment_pipeline",
-        "backend.data.aggregate_sentiment",
-    ]
-
-    for module_name in scripts:
-        print(f"Running {module_name}...")
-        mod = importlib.import_module(module_name)
-        if hasattr(mod, "main"):
-            mod.main()
-        else:
-            raise Exception(f"{module_name} has no main() function.")
-    return {"status": "success", "message": "Pipeline re-run successfully."}
 
 @router.get("/tickers/search")
 def search_ticker_full(

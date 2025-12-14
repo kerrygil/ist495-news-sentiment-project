@@ -1,10 +1,21 @@
+import os
+import sys
+from pathlib import Path
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # parent = backend
+PARENT = os.path.dirname(BASE_DIR)                     # project root
+
+for p in (BASE_DIR, PARENT):
+    if p not in sys.path:
+        sys.path.append(p)
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.app import routes
 from backend.data.database import Base, engine, SessionLocal
-from backend.data.cleanup_old_articles import delete_old_articles
+from backend.pipelines.cleanup_old_articles import delete_old_articles
 from backend.app.utils import sanitize_floats
 from backend.app.scheduler import scheduler, start_scheduler
 

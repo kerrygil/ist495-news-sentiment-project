@@ -181,7 +181,7 @@ def feature_engineering(articles_path, prices_path, output_path):
 def main():
     feature_engineering(
         "backend/data/cleaned_data/articles_cleaned.csv",
-        "backend/scrapers/prices.csv",
+        "backend/data/prices.csv",
         "backend/data/cleaned_data/articles_features.csv"
     )
 

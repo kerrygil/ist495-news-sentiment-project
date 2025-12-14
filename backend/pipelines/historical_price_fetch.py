@@ -458,11 +458,16 @@ def process_articles(batch_limit: Optional[int] = None):
         time.sleep(0.5)
     db.close()
 
-def export_prices_to_csv(): 
-    df = pd.read_sql("SELECT * FROM historical_prices", engine) 
-    csv_path = os.path.join(os.path.dirname(__file__), "prices.csv") 
-    df.to_csv(csv_path, index=False) 
-    print(f"Exported prices to {csv_path}") 
+def export_prices_to_csv():
+    df = pd.read_sql("SELECT * FROM historical_prices", engine)
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    csv_path = os.path.join(base_dir, "data", "prices.csv")
+
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+
+    df.to_csv(csv_path, index=False)
+    print(f"Exported prices to {csv_path}")
     
 def main(): 
     process_articles() 
