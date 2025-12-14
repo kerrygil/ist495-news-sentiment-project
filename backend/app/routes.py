@@ -8,7 +8,7 @@ from sqlalchemy import func, text
 from backend.models import data_models
 from backend.models.data_models import HistoricalPrice, Ticker, Article
 from backend.data.database import get_db
-from backend.app.utils import orm_to_dict, sanitize_floats, try_float
+from backend.app.utils import sanitize_floats, try_float
 import pandas as pd
 import os
 import importlib
@@ -137,36 +137,6 @@ def get_tickers_summary():
     )
 
     return {"ticker_summary": summary.to_dict(orient="records")}
-
-'''
-@router.post("/refresh_data")
-def refresh_data():
-    """Run the full data pipeline in order."""
-    try:
-        scripts = [
-            "backend.scrapers.headline_ticker_scraper",
-            "backend.scrapers.historical_price_fetch",
-            "backend.data.cleaning_pipeline",
-            "backend.data.feature_engineering",
-            "backend.data.sentiment_pipeline",
-            "backend.data.aggregate_sentiment",
-        ]
-        for script in scripts:
-            print(f"Running {script} ...")
-            subprocess.run(
-                [sys.executable, "-m", script],
-                check=True,
-                # capture_output=True,
-                text=True,
-                env=os.environ.copy
-            )
-        return {"status": "success", "message": "Pipeline re-run successfully."}
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Pipeline failed while running {script}: {e.stderr or e}"
-        )
-'''
 
 @router.post("/refresh_data")
 def refresh_data():

@@ -42,6 +42,20 @@ def keyword_sentiment_score(title_clean, csv_dict, lm_dict):
     lm_score = 0
     count = 0
 
+    for _, row in csv_dict.iterrows():
+        keyword = str(row.get("keyword", "")).lower().strip()
+        if not keyword:
+            continue
+
+        # multi-word phrase detection
+        if " " in keyword:
+            if keyword in title_clean:  # substring match
+                sign = 1 if row.get("sentiment") == "positive" else -1
+                strength = float(row.get("strength", 1))
+                csv_score += sign * strength
+                count += 1
+            continue
+
     # CSV dict
     for _, row in csv_dict.iterrows():
         keyword = str(row.get("keyword", "")).lower()

@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from backend.app import routes, debug_router
+from backend.app import routes
 from backend.data.database import Base, engine, SessionLocal
 from backend.data.cleanup_old_articles import delete_old_articles
 from backend.app.utils import sanitize_floats
@@ -48,6 +48,5 @@ async def sanitize_json_responses(request: Request, call_next):
     return response
 
 app.include_router(routes.router)
-app.include_router(debug_router.router)
 
 Base.metadata.create_all(bind=engine)

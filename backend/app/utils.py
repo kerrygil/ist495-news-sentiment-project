@@ -1,5 +1,3 @@
-import math
-
 def sanitize_floats(obj):
     import math
 
