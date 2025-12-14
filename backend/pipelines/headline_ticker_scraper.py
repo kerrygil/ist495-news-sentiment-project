@@ -173,10 +173,6 @@ def main():
             skipped += 1
             continue
 
-        if timestamp.hour < 9:
-            skipped += 1
-            continue
-
         # Insert one Article per ticker symbol found
         for ticker_symbol in tickers:
 

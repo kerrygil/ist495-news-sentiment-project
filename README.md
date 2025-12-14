@@ -77,7 +77,7 @@ python --version
 ### 2. Clone the Repository
 ```bash
 git clone https://github.com/kerrygil/ist495-news-sentiment-project.git
-cd IST495_News_Sentiment_Project
+cd IST495-News-Sentiment-Project
 ```
 
 ### 3. PostgreSQL Version
@@ -102,7 +102,9 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 
 ### Install dependencies
 ```bash
+cd backend
 pip install -r requirements.txt
+cd ..
 ```
 
 ### Creating the PostgreSQL database
@@ -114,16 +116,10 @@ CREATE DATABASE sentiment_dev;
 \q
 ```
 
-Then apply your schema:
-
-```bash
-python backend/data/create_schema.py
-```
-
 ### Initialize the database
-In PostgreSQL, create your DB and update `.env`.
+In PostgreSQL, create your DB and update `.env`. The schema will automatically be applied when upon the first run of the application.
 
-### 🔐 Environment Variables (`.env`)
+### Environment Variables (`.env`)
 
 The backend requires a `.env` file in the **project root** to configure the database connection.  
 This file is intentionally excluded from version control via `.gitignore`, so you must create it manually.
@@ -186,6 +182,8 @@ Frontend runs at:
 ```
 http://localhost:3000
 ```
+
+Uvicorn must be running at the same time, in a separate PowerShell window, in order for the frontend to load.
 
 ---
 

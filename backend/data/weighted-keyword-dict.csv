@@ -81,6 +81,7 @@ dividend increase,positive,1.2
 dividend suspension,negative,1
 dollar weakness,positive,1
 dovish,positive,1
+down,negative,1
 down big,negative,1.3
 downgrade,negative,1.2
 downgraded,negative,1.2
@@ -257,6 +258,7 @@ skyrocketing,positive,1.5
 slump,negative,1.3
 slowdown,negative,1
 soar,positive,1.3
+soared,positive,1.4
 soaring,positive,1.4
 software upgrade,positive,1
 solid,positive,1
@@ -281,12 +283,14 @@ supply chain,negative,1
 surge,positive,1.4
 surging,positive,1.4
 takeover,positive,1
+tank,negative,1.5
 tanked,negative,1.5
 tanking,negative,1.5
 targets met,positive,1.3
 tapering,negative,1
 target raised,positive,1.3
 tariffs,negative,1
+tarriff,negative,1
 tech layoffs,negative,1
 tightening,negative,1
 top pick,positive,1.3
