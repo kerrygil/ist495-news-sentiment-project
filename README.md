@@ -155,7 +155,7 @@ POSTGRES_DB=sentiment_dev
 
 ### Run backend
 ```bash
-uvicorn backend.main:app --reload
+uvicorn backend.app.main:app --reload
 ```
 
 Backend will run at:
