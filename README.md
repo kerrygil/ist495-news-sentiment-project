@@ -22,7 +22,7 @@ This project was built for IST 495 and includes:
   - `/recent_articles`
   - `/analytics/ticker-performance-3d`
 - Automatic scheduled scraping using APScheduler  
-- Persistent PostgreSQL/SQLite database
+- Persistent PostgreSQL database
 
 ### Frontend (Next.js)
 - Displays recent news articles with pagination, sorting, and filtering  
