@@ -68,14 +68,20 @@ def feature_engineering(articles_path, prices_path, output_path):
     )
 
     articles_df["published_at"] = pd.to_datetime(
-        articles_df["published_at"], errors="coerce", utc=True
-    ).dt.tz_convert("America/New_York").dt.tz_localize(None)
+        articles_df["published_at"], errors="coerce"
+    )
 
     prices_df["created_at"] = pd.to_datetime(
-        prices_df["created_at"], errors="coerce", utc=True
-    ).dt.tz_convert("America/New_York").dt.tz_localize(None)
+        prices_df["created_at"], errors="coerce"
+    )
+
+    prices_df["created_at"] = (
+        pd.to_datetime(prices_df["created_at"], errors="coerce")
+        .dt.tz_localize(None)
+    )
 
     cutoff_date = datetime.now() - timedelta(days=2)
+
     articles_df = articles_df[articles_df["published_at"] >= cutoff_date]
     prices_df = prices_df[prices_df["created_at"] >= cutoff_date]
 
