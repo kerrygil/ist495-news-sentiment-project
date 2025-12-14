@@ -266,6 +266,8 @@ spending slowdown,negative,1
 stable,positive,1
 stimulus,positive,1
 stock split,positive,1
+stock down,negative,1.3
+stock surge,positive,1.4
 strategic partnership,positive,1.3
 strength,positive,1
 strong buy,positive,1
