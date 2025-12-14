@@ -22,7 +22,7 @@ This project was built for IST 495 and includes:
   - `/recent_articles`
   - `/analytics/ticker-performance-3d`
 - Automatic scheduled scraping using APScheduler  
-- Persistent PostgreSQL/SQLite database
+- Persistent PostgreSQL database
 
 ### Frontend (Next.js)
 - Displays recent news articles with pagination, sorting, and filtering  
@@ -127,9 +127,6 @@ This file is intentionally excluded from version control via `.gitignore`, so yo
 Create a new file named **`.env`** in the project root and include the following:
 
 ```
-# Path to your Python interpreter (optional, used for development tools)
-PYTHON_PATH=<path-to-python>
-
 # PostgreSQL database configuration
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
@@ -145,7 +142,6 @@ POSTGRES_DB=sentiment_dev
 
 ### Example (Windows)
 ```
-PYTHON_PATH=C:\Users\<yourname>\AppData\Local\Programs\Python\Python313\python.exe
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_USER=postgres
@@ -155,12 +151,16 @@ POSTGRES_DB=sentiment_dev
 
 ### Run backend
 ```bash
-uvicorn backend.main:app --reload
+uvicorn backend.app.main:app --reload
 ```
 
 Backend will run at:
 ```
 http://127.0.0.1:8000
+```
+You can check backend functionality using FastAPI Docs at:
+```
+http://127.0.0.1:8000/docs#/
 ```
 
 Scheduled scraping begins automatically on startup.
